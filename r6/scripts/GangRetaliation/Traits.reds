@@ -145,6 +145,9 @@ public class GRTraits extends ScriptableSystem {
             let targetId: Int32 = spawner.GetNemesisId(hitEvent.target.GetEntityID());
             if targetId > 0 {
                 traits.ApplyDefense(targetId, hitEvent);
+                // Fase 7: un remate (cabeza o explosion) impide que vuelva.
+                let attack: ref<AttackData> = hitEvent.attackData;
+                spawner.RecordPlayerHit(targetId, attack.HasFlag(hitFlag.Headshot) || AttackData.IsExplosion(attack.GetAttackType()));
             }
         } else {
             if hitEvent.target.IsPlayer() {

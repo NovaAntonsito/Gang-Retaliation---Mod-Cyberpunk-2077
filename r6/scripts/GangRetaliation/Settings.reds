@@ -182,6 +182,16 @@ public class GRSettings extends ScriptableSystem {
     @runtimeProperty("ModSettings.max", "100")
     public let feudChancePercent: Int32 = 25;
 
+    @runtimeProperty("ModSettings.mod", "GR-ModName")
+    @runtimeProperty("ModSettings.category", "GR-CatHierarchy")
+    @runtimeProperty("ModSettings.category.order", "50")
+    @runtimeProperty("ModSettings.displayName", "GR-SetReturnChance")
+    @runtimeProperty("ModSettings.description", "GR-SetReturnChanceDesc")
+    @runtimeProperty("ModSettings.step", "5")
+    @runtimeProperty("ModSettings.min", "0")
+    @runtimeProperty("ModSettings.max", "100")
+    public let returnChancePercent: Int32 = 40;
+
     // -------------------------------------------------------------------------
     // Debug
     // -------------------------------------------------------------------------

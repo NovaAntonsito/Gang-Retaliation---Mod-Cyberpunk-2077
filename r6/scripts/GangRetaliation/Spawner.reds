@@ -15,8 +15,12 @@ public class GRSpawner extends ScriptableSystem {
     // Icono sobre la cabeza del Nemesis.
     private let m_mappins: array<NewMappinID>;
     private let m_hasMappin: array<Bool>;
-    // Nemesis muertos pendientes de leer por CET.
+    // Nemesis muertos pendientes de leer por CET, y como murieron (paralelo):
+    // "confirmed" = remate (cabeza, explosion o desmembrado), "knockout" = inconsciente, "normal" = el resto.
     private let m_deaths: array<Int32>;
+    private let m_deathKinds: array<String>;
+    // Nemesis cuyo ultimo golpe de V fue de remate (disparo a la cabeza o explosion).
+    private let m_finisherIds: array<Int32>;
     // Apariencia real con la que aparece cada Nemesis ("id:apariencia"), para que CET la guarde.
     private let m_appearanceReports: array<String>;
 
@@ -197,10 +201,40 @@ public class GRSpawner extends ScriptableSystem {
         this.RemoveMappin(index);
         let nemesisId: Int32 = this.m_nemesisIDs[index];
         if nemesisId > 0 {
+            let kind: String = this.DeathKind(nemesisId, GameInstance.FindEntityByID(this.GetGameInstance(), id) as ScriptedPuppet);
             ArrayPush(this.m_deaths, nemesisId);
+            ArrayPush(this.m_deathKinds, kind);
+            ArrayRemove(this.m_finisherIds, nemesisId);
             // Deja de contar como Nemesis: ni rasgos ni segunda muerte.
             this.m_nemesisIDs[index] = 0;
-            GRLog("Nemesis #" + IntToString(nemesisId) + " muerto");
+            GRLog("Nemesis #" + IntToString(nemesisId) + " muerto (" + kind + ")");
+        }
+    }
+
+    private func DeathKind(nemesisId: Int32, npc: ref<ScriptedPuppet>) -> String {
+        if IsDefined(npc) && !npc.IsDead() && (ScriptedPuppet.IsUnconscious(npc) || ScriptedPuppet.IsDefeated(npc)) {
+            return "knockout";
+        }
+        if ArrayContains(this.m_finisherIds, nemesisId) {
+            return "confirmed";
+        }
+        if IsDefined(npc) && IsDefined(npc.GetDismembermentComponent()) {
+            let limbs = npc.GetDismembermentComponent().GetDismemberedLimbCount();
+            if limbs.fleshDismemberments + limbs.cyberDismemberments > 0u {
+                return "confirmed";
+            }
+        }
+        return "normal";
+    }
+
+    // Golpe de V a un Nemesis (lo llama GRTraits.OnHit): se recuerda si fue de remate.
+    public func RecordPlayerHit(nemesisId: Int32, finisher: Bool) {
+        if finisher {
+            if !ArrayContains(this.m_finisherIds, nemesisId) {
+                ArrayPush(this.m_finisherIds, nemesisId);
+            }
+        } else {
+            ArrayRemove(this.m_finisherIds, nemesisId);
         }
     }
 
@@ -533,8 +567,13 @@ public class GRSpawner extends ScriptableSystem {
         return this.m_deaths[index];
     }
 
+    public func GetDeathKind(index: Int32) -> String {
+        return index < ArraySize(this.m_deathKinds) ? this.m_deathKinds[index] : "normal";
+    }
+
     public func ClearDeaths() {
         ArrayClear(this.m_deaths);
+        ArrayClear(this.m_deathKinds);
     }
 
     public func GetAppearanceReportCount() -> Int32 {

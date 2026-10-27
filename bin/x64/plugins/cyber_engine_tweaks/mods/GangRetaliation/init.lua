@@ -212,10 +212,22 @@ local function processDeaths()
     for i = 0, count - 1 do
         local n = findNemesis(spawner:GetDeath(i))
         if n and n.status ~= "dead" then
+            local kind = spawner:GetDeathKind(i)
             n.status = "dead"
             n.diedAt = os.time()
             Store.dirty = true
-            notify(string.format(text("GR-MsgNemesisDead", "%s is dead... for now."), labelOf(n)))
+            -- Fase 7: si no fue un remate, puede volver reconstruido (no se le dice al jugador).
+            local settings = getSettings()
+            local returns = Hierarchy.resolveDeath(n, kind, {
+                day = gameDay(), random = math.random,
+                settings = { returnChancePercent = settings and settings.returnChancePercent or 40 },
+            })
+            debugLog(string.format("%s muere (%s): %s", labelOf(n), kind, returns and ("vuelve el dia " .. string.format("%.1f", n.returnDay)) or "no vuelve"))
+            if kind == "confirmed" then
+                notify(string.format(text("GR-MsgNemesisConfirmed", "%s is dead. For good this time."), labelOf(n)))
+            else
+                notify(string.format(text("GR-MsgNemesisDead", "%s is dead... for now."), labelOf(n)))
+            end
             Hierarchy.onDeath(Store.ensureCampaign(GR.campaignId), n, gameDay())
             if (n.rank or 1) == Hierarchy.BOSS then
                 notify(string.format(text("GR-MsgBossDown", "The %s lost their boss. Someone will want the throne..."), Names.gangLabel(n.gang)))
@@ -389,6 +401,12 @@ local function hierarchyEvent(kind, a, b)
     local rankA = rankLabel(a.rank, a.gender)
     if kind == "promoted" then
         notify(string.format(text("GR-MsgPromoted", "%s rose to %s of the %s."), nameA, rankA, gang))
+    elseif kind == "returned" then
+        notify(string.format(text("GR-MsgReturned", "%s is back from the dead, rebuilt with chrome. They are coming for you."), nameA .. " (" .. gang .. ")"))
+        local phone = getSystem("GangRetaliation.GRPhone")
+        if phone then
+            phone:SendSms(nameA, text("GR-SmsReturn-" .. math.random(3), "..."))
+        end
     elseif kind == "recruited" then
         notify(string.format(text("GR-MsgRecruited", "New face in the %s: %s, %s."), gang, nameA, rankA))
     elseif kind == "feudKill" then
@@ -416,6 +434,7 @@ local function updateHierarchy(feudChance)
             vacancyDays = settings.vacancyDays,
             feudChancePercent = feudChance or settings.feudChancePercent,
             maxPerGang = settings.maxPerGang,
+            returnChancePercent = settings.returnChancePercent,
         },
         random = math.random,
         isSpawned = function(id) return spawner:IsNemesisSpawned(id) end,
@@ -707,6 +726,17 @@ registerForEvent("onDraw", function()
                             n.status = "dead"
                             n.diedAt = os.time()
                             Store.save()
+                        end
+                        ImGui.SameLine()
+                        -- Fase 7: muere y vuelve en cuanto pase la jerarquia (usar "+1 game day").
+                        if ImGui.SmallButton("Debug: dies, returns##ret" .. tostring(n.id)) then
+                            n.status = "dead"
+                            n.diedAt = os.time()
+                            n.confirmed = nil
+                            n.returnDay = gameDay()
+                            Hierarchy.onDeath(Store.ensureCampaign(GR.campaignId), n, gameDay())
+                            Store.save()
+                            GR.lastAction = "#" .. n.id .. " volvera con +1 game day"
                         end
                     end
                 end

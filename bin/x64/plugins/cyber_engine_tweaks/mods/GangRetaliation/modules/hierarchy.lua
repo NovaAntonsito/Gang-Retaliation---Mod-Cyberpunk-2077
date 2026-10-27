@@ -12,6 +12,7 @@
 local Traits = require("modules/traits")
 local Names = require("modules/names")
 local Escorts = require("modules/escorts")
+local CyberLooks = require("modules/cyberlooks")
 
 local Hierarchy = {}
 
@@ -239,6 +240,58 @@ local function feud(campaign, gang, ctx)
     end
 end
 
+-- Fase 7: muerte de un Nemesis. kind = "confirmed" (remate: cabeza, explosion, desmembrado),
+-- "knockout" (inconsciente) o "normal". Decide si volvera y cuando. Devuelve true si volvera.
+function Hierarchy.resolveDeath(n, kind, ctx)
+    n.returnDay = nil
+    if kind == "confirmed" then
+        n.confirmed = true
+        return false
+    end
+    local chance = kind == "knockout" and 100 or (ctx.settings.returnChancePercent or 40)
+    if ctx.random() * 100 >= chance then return false end
+    -- Entre 2 y 4 dias de juego en el matasanos.
+    n.returnDay = ctx.day + 2 + ctx.random() * 2
+    return true
+end
+
+-- Vuelve reconstruido con cyberware: titulo nuevo, +3 de renombre, una fortaleza de implantes y su
+-- punto debil (hackeos o electricidad), otro aspecto. Si su puesto esta ocupado, baja de rango.
+function Hierarchy.revive(campaign, n, ctx)
+    n.status = "alive"
+    n.returnDay = nil
+    n.diedAt = nil
+    n.diedBy = nil
+    n.returns = (n.returns or 0) + 1
+    n.origin = "returned"
+    n.health = 100
+    n.titleEn, n.titleEs = Names.returnedTitle(n.gender)
+    Hierarchy.addRenown(n, 3)
+    Traits.add(n, { "tough", "hardhead", "blastproof", "insulated", "deadly" })
+    if not Traits.addKey(n, "weak_hack") then Traits.addKey(n, "weak_shock") end
+    CyberLooks.apply(n)
+
+    local rank = n.rank or 1
+    while rank > 1 and #Hierarchy.members(campaign, n.gang, rank) - 1 >= Hierarchy.cap[rank] do
+        rank = rank - 1
+    end
+    n.rank = rank
+end
+
+-- Los que tocaba que volvieran hoy. Devuelve la lista de los que han vuelto.
+local function processReturns(campaign, ctx)
+    local back = {}
+    for _, n in ipairs(campaign.nemeses) do
+        if n.status == "dead" and n.returnDay and not n.confirmed and ctx.day >= n.returnDay
+            and not ctx.isSpawned(n.id) then
+            Hierarchy.revive(campaign, n, ctx)
+            table.insert(back, n)
+            ctx.event("returned", n)
+        end
+    end
+    return back
+end
+
 -- Corrige datos viejos o imposibles: mas Jefes o Tenientes de los que caben.
 local function enforceCaps(campaign, gang, ctx)
     for rank = 3, 2, -1 do
@@ -254,6 +307,7 @@ end
 -- ctx = { day, settings = { vacancyDays, feudChancePercent }, random(), isSpawned(id),
 --         addNemesis(data), event(kind, a, b, reason) }
 function Hierarchy.update(campaign, ctx)
+    processReturns(campaign, ctx)
     -- Tambien las bandas sin nadie vivo: si V acaba con todos, la cupula se rehace con reclutas.
     for _, gang in ipairs(Hierarchy.knownGangs(campaign)) do
         enforceCaps(campaign, gang, ctx)

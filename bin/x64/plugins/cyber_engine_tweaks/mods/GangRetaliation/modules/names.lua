@@ -101,6 +101,16 @@ titles.promoted = {
     { en = "the Enforcer", es = "el Ejecutor", es_f = "la Ejecutora" },
 }
 
+-- Fase 7: vuelve de la muerte reconstruido con cyberware.
+titles.returned = {
+    { en = "the Rebuilt", es = "el Reconstruido", es_f = "la Reconstruida" },
+    { en = "Scrap", es = "Chatarra" },
+    { en = "the Revenant", es = "el Aparecido", es_f = "la Aparecida" },
+    { en = "Chrome Ghost", es = "Fantasma de Cromo" },
+    { en = "Second Life", es = "Segunda Vida" },
+    { en = "the Undying", es = "el Que No Muere", es_f = "la Que No Muere" },
+}
+
 local function pick(list)
     return list[math.random(#list)]
 end
@@ -131,6 +141,13 @@ function Names.generate(gang, gender, origin, taken)
 end
 
 -- Nombre completo para mostrar: Static "the Survivor" / Static "el Superviviente"
+-- Titulo nuevo de un Nemesis que vuelve de la muerte (conserva el nombre). Devuelve en, es.
+function Names.returnedTitle(gender)
+    local title = pick(titles.returned)
+    local es = (isFemale(gender) and title.es_f) or title.es
+    return title.en, es
+end
+
 function Names.display(nemesis, lang)
     local title = (lang == "es") and nemesis.titleEs or nemesis.titleEn
     if not title or title == "" then return nemesis.name or "?" end
