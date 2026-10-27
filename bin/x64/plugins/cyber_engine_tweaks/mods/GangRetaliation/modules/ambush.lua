@@ -13,11 +13,17 @@ function Ambush.parseGangs(list)
     return set
 end
 
+-- Ya se ha cruzado con V: se le escapo o aparecio en un gig o emboscada.
+function Ambush.hasMetV(n)
+    return (n.encounters or 1) > 0 or (n.gigs or 0) > 0 or (n.ambushes or 0) > 0
+end
+
 -- Nemesis vivo al azar. Los de la banda del distrito pesan x4 y el rango multiplica.
-function Ambush.pick(nemeses, districtGangs)
+-- metOnly = solo los que ya conocen a V (los de la cupula inicial no emboscan a un desconocido).
+function Ambush.pick(nemeses, districtGangs, metOnly)
     local pool, total = {}, 0
     for _, n in ipairs(nemeses) do
-        if n.status ~= "dead" and n.recordID and n.id then
+        if n.status ~= "dead" and n.recordID and n.id and (not metOnly or Ambush.hasMetV(n)) then
             local weight = (n.rank or 1) * (districtGangs[n.gang] and 4 or 1)
             total = total + weight
             table.insert(pool, { n = n, w = weight })

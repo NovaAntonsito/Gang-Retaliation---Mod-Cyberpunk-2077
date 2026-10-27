@@ -1,6 +1,7 @@
 -- Gang Retaliation - fase 5: jerarquia de cada banda (Soldado -> Teniente -> Jefe)
 --
--- Cada banda tiene 1 Jefe, 2 Tenientes y el resto Soldados. Los Nemesis ganan renombre
+-- Cada banda tiene 1 Jefe, 2 Tenientes y el resto Soldados. Una campana nueva empieza con
+-- Jefe y Tenientes ya puestos en cada banda (seed). Los Nemesis ganan renombre
 -- (escaparse, sobrevivir a emboscadas) y suben de rango:
 --   - Ascenso rapido: hay hueco arriba y tiene renombre de sobra.
 --   - Vacante: tras unos dias de juego sube el de mas renombre del rango inferior o,
@@ -47,6 +48,23 @@ function Hierarchy.activeGangs(campaign)
     return gangs
 end
 
+-- Bandas con jerarquia: las que tienen tipos de NPC para reclutar y las que ya tienen Nemesis.
+function Hierarchy.knownGangs(campaign)
+    local gangs, seen = {}, {}
+    for gang in pairs(Escorts) do
+        seen[gang] = true
+        table.insert(gangs, gang)
+    end
+    for _, gang in ipairs(Hierarchy.activeGangs(campaign)) do
+        if not seen[gang] then
+            seen[gang] = true
+            table.insert(gangs, gang)
+        end
+    end
+    table.sort(gangs)
+    return gangs
+end
+
 local function gangState(campaign, gang)
     campaign.hierarchy = campaign.hierarchy or {}
     local state = campaign.hierarchy[gang]
@@ -85,9 +103,9 @@ function Hierarchy.promote(n, ctx)
     end
 end
 
--- Recluta un Nemesis nuevo directamente en un rango (vacante sin candidatos).
+-- Recluta un Nemesis nuevo directamente en un rango (vacante sin candidatos o campana nueva).
 -- Necesita un tipo de NPC de la banda: la lista de escoltas o, si no hay, uno de sus Nemesis.
-local function recruit(campaign, gang, rank, ctx)
+local function recruit(campaign, gang, rank, ctx, origin)
     local recordID
     local list = Escorts[gang]
     if list and #list > 0 then
@@ -100,16 +118,41 @@ local function recruit(campaign, gang, rank, ctx)
 
     -- Los registros de mujer acaban en _wa/_wb/_fa...
     local gender = (string.match(recordID, "_[wf][a-z]$") and "Female") or "Male"
-    local name, titleEn, titleEs = Names.generate(gang, gender, "promoted")
+    local taken = {}
+    for _, other in ipairs(campaign.nemeses) do
+        if other.gang == gang and other.name then taken[other.name] = true end
+    end
+    local name, titleEn, titleEs = Names.generate(gang, gender, "promoted", taken)
     local n = ctx.addNemesis({
         name = name, titleEn = titleEn, titleEs = titleEs,
-        gang = gang, rank = 1, origin = "promoted", status = "alive",
+        gang = gang, rank = 1, origin = origin or "promoted", status = "alive",
         encounters = 0, recordID = recordID, gender = gender, health = 100,
         renown = Hierarchy.fastRenown[rank] or 0, created = os.time(), traits = {},
     })
     Traits.ensure(n)
     while (n.rank or 1) < rank do Hierarchy.promote(n, ctx) end
     return n
+end
+
+-- Campana nueva: cada banda empieza con su Jefe y sus Tenientes, sin avisos.
+-- Solo una vez por campana; despues los puestos se mueven con ascensos, vacantes y luchas.
+-- Devuelve true si ha reclutado a alguien.
+function Hierarchy.seed(campaign, ctx)
+    if campaign.seeded then return false end
+    campaign.seeded = true
+    local added = false
+    for _, gang in ipairs(Hierarchy.knownGangs(campaign)) do
+        for rank = 3, 2, -1 do
+            local free = Hierarchy.cap[rank] - #Hierarchy.members(campaign, gang, rank)
+            for _ = 1, free do
+                if #Hierarchy.members(campaign, gang) < ctx.settings.maxPerGang
+                    and recruit(campaign, gang, rank, ctx, "seeded") then
+                    added = true
+                end
+            end
+        end
+    end
+    return added
 end
 
 -- Ocupa los huecos de Teniente y Jefe de una banda.
@@ -211,7 +254,8 @@ end
 -- ctx = { day, settings = { vacancyDays, feudChancePercent }, random(), isSpawned(id),
 --         addNemesis(data), event(kind, a, b, reason) }
 function Hierarchy.update(campaign, ctx)
-    for _, gang in ipairs(Hierarchy.activeGangs(campaign)) do
+    -- Tambien las bandas sin nadie vivo: si V acaba con todos, la cupula se rehace con reclutas.
+    for _, gang in ipairs(Hierarchy.knownGangs(campaign)) do
         enforceCaps(campaign, gang, ctx)
         fillRanks(campaign, gang, ctx)
         feud(campaign, gang, ctx)

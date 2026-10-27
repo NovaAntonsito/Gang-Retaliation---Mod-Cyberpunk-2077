@@ -30,18 +30,29 @@ public class GRSystem extends ScriptableSystem {
     }
 
     private func OnPlayerAttach(request: ref<PlayerAttachRequest>) {
-        this.EnsureCampaignId();
+        // En el menu principal tambien llega un jugador: ahi no se crea nada (dejaba campanas basura en el JSON).
+        if this.IsInGame() {
+            this.EnsureCampaignId();
+        }
     }
 
-    private func EnsureCampaignId() {
+    // false en el menu principal (antes de cargar una partida).
+    public func IsInGame() -> Bool {
+        let requests: wref<inkISystemRequestsHandler> = GameInstance.GetSystemRequestsHandler();
+        return IsDefined(requests) && !requests.IsPreGame();
+    }
+
+    // CET lo pide si una partida ya cargada sigue sin id (save de antes del mod sin OnPlayerAttach en juego).
+    public func EnsureCampaignId() {
         if this.m_campaignId == 0 {
             this.m_campaignId = RandRange(100000, 999999999);
             GRLog("Nueva campana: " + IntToString(this.m_campaignId));
         }
     }
 
+    // 0 hasta que V aparece (OnPlayerAttach): durante la carga la partida aun no ha restaurado su id
+    // y generar uno aqui creaba una campana nueva en cada carga.
     public func GetCampaignId() -> Int32 {
-        this.EnsureCampaignId();
         return this.m_campaignId;
     }
 

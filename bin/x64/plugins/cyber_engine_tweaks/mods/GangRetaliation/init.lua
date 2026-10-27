@@ -153,7 +153,11 @@ local function createNemesis(evt)
         return
     end
 
-    local name, titleEn, titleEs = Names.generate(gang, evt.gender, evt.origin)
+    local taken = {}
+    for _, other in ipairs(Store.campaign(GR.campaignId).nemeses) do
+        if other.gang == gang and other.name then taken[other.name] = true end
+    end
+    local name, titleEn, titleEs = Names.generate(gang, evt.gender, evt.origin, taken)
     local nemesis = Store.addNemesis(GR.campaignId, {
         name = name,
         titleEn = titleEn,
@@ -264,7 +268,7 @@ local function tryAmbush(force, warnSeconds)
     if blocker ~= "" then return "blocked: " .. blocker end
 
     local districtGangs = Ambush.parseGangs(spawner:GetDistrictGangs())
-    local n = Ambush.pick(campaign.nemeses, districtGangs)
+    local n = Ambush.pick(campaign.nemeses, districtGangs, not force)
     if not n then return "no living Nemesis" end
 
     Store.ensureCampaign(GR.campaignId).lastAmbush = os.time()
@@ -405,10 +409,8 @@ local function updateHierarchy(feudChance)
     local settings = getSettings()
     local spawner = getSpawner()
     if not settings or not spawner or not settings.enabled then return end
-    local campaign = Store.campaign(GR.campaignId)
-    if #campaign.nemeses == 0 then return end
 
-    Hierarchy.update(Store.ensureCampaign(GR.campaignId), {
+    local ctx = {
         day = gameDay(),
         settings = {
             vacancyDays = settings.vacancyDays,
@@ -419,18 +421,65 @@ local function updateHierarchy(feudChance)
         isSpawned = function(id) return spawner:IsNemesisSpawned(id) end,
         addNemesis = function(data) return Store.addNemesis(GR.campaignId, data) end,
         event = hierarchyEvent,
-    })
+    }
+    local campaign = Store.ensureCampaign(GR.campaignId)
+    if Hierarchy.seed(campaign, ctx) then
+        debugLog("Campana nueva: cupulas de las bandas creadas (" .. #campaign.nemeses .. " Nemesis)")
+        Store.save()
+    end
+    Hierarchy.update(campaign, ctx)
+end
+
+-- Rasgos para el menu, uno por linea: "S|corto|largo" (S = + fortaleza, - debilidad, ? sin descubrir).
+-- Los sin descubrir salen como "???" para que escanear siga teniendo sentido.
+local function menuTraits(n)
+    local lines = {}
+    for _, t in ipairs(n.traits or {}) do
+        if t.revealed then
+            local full = traitName(t.key)
+            local sign = Traits.isWeakness(t.key) and "-" or "+"
+            table.insert(lines, sign .. "|" .. text("GR-TraitShort-" .. t.key, full) .. "|" .. full)
+        else
+            table.insert(lines, "?|???|" .. text("GR-MenuScanHint", "??? - scan them to find out"))
+        end
+    end
+    return table.concat(lines, "\n")
+end
+
+-- Cuanto renombre le falta para el ascenso rapido.
+local function renownHint(n)
+    local rank = n.rank or 1
+    if rank >= Hierarchy.BOSS then
+        return text("GR-MenuRenownTop", "At the top. They only fall if you kill them or someone overthrows them.")
+    end
+    local need = Hierarchy.fastRenown[rank + 1] - (n.renown or 0)
+    local nextRank = rankLabel(rank + 1, n.gender)
+    if need <= 0 then
+        return string.format(text("GR-MenuRenownReady", "Ready to become %s as soon as a spot opens."), nextRank)
+    end
+    return string.format(text("GR-MenuRenownNeed", "%d more for a fast promotion to %s."), need, nextRank)
+end
+
+-- Puesto libre: cuanto falta para que se cubra si nadie llega al renombre del ascenso rapido.
+local function vacancyNote(campaign, gang, rank)
+    local state = campaign.hierarchy and campaign.hierarchy[gang]
+    local since = state and state.vacant and state.vacant[tostring(rank)]
+    local settings = getSettings()
+    if not since or not settings then return "" end
+    local left = settings.vacancyDays - (gameDay() - since)
+    if left <= 0 then return text("GR-MenuVacantSoon", "Being filled soon") end
+    return string.format(text("GR-MenuVacantIn", "Filled in %.1f days"), left)
 end
 
 -- Datos para la ventana de Nemesis del menu (Menu.reds): textos ya traducidos.
--- Los rasgos sin descubrir salen como "???" para que escanear siga teniendo sentido.
 local function pushMenu()
     local sys = getSystem("GangRetaliation.GRMenuData")
     if not sys then return end
     sys:Clear()
 
+    local campaign = Store.campaign(GR.campaignId)
     local list = {}
-    for _, n in ipairs(Store.campaign(GR.campaignId).nemeses) do
+    for _, n in ipairs(campaign.nemeses) do
         if n.gang then table.insert(list, n) end
     end
     table.sort(list, function(a, b)
@@ -440,26 +489,20 @@ local function pushMenu()
 
     local l = lang()
     for _, n in ipairs(list) do
-        local parts = {}
-        for _, t in ipairs(n.traits or {}) do
-            if t.revealed then
-                table.insert(parts, (Traits.isWeakness(t.key) and "- " or "+ ") .. traitName(t.key))
-            else
-                table.insert(parts, "???")
-            end
-        end
-        -- Dos rasgos por linea para que quepan en la tarjeta.
-        local lines = {}
-        for i = 1, #parts, 2 do
-            table.insert(lines, parts[i] .. (parts[i + 1] and ("    " .. parts[i + 1]) or ""))
-        end
-        local traits = table.concat(lines, "\n")
-        local stats = string.format(text("GR-MenuStats", "Encounters %d  |  Renown %d  |  Ambushes %d"),
-            n.encounters or 1, n.renown or 0, n.ambushes or 0)
+        local cause = ""
         if n.status == "dead" then
-            stats = stats .. "  |  " .. (n.diedBy == "feud" and text("GR-MenuDiedFeud", "Killed by their own gang") or text("GR-MenuDiedV", "Killed by V"))
+            cause = n.diedBy == "feud" and text("GR-MenuDiedFeud", "Killed by their own gang") or text("GR-MenuDiedV", "Killed by V")
         end
-        sys:Add(n.gang, Names.gangLabel(n.gang), n.rank or 1, n.status == "dead", Names.display(n, l), traits, stats)
+        local title = (l == "es") and n.titleEs or n.titleEn
+        -- La primera huida no suma a n.escapes (crea al Nemesis).
+        local escapes = (n.escapes or 0) + ((n.origin == "escaped" or n.origin == "fled") and 1 or 0)
+        sys:Add(n.gang, Names.gangLabel(n.gang), n.rank or 1, n.status == "dead", n.name or "?", title or "",
+            Ambush.hasMetV(n), n.renown or 0)
+        sys:AddDetail(menuTraits(n), renownHint(n), text("GR-Origin-" .. (n.origin or "escaped"), n.origin or ""), cause)
+        sys:AddStats(n.encounters or 1, escapes, n.ambushes or 0, n.gigs or 0)
+    end
+    for _, gang in ipairs(Hierarchy.knownGangs(campaign)) do
+        sys:SetVacancy(gang, vacancyNote(campaign, gang, 3), vacancyNote(campaign, gang, 2))
     end
 end
 
@@ -500,8 +543,17 @@ local function refreshCampaign()
     end
     local sys = getSystem("GangRetaliation.GRSystem")
     if not sys then return end
+    -- En el menu principal no hay campana: un id de ahi se colaba en el JSON como campana basura.
+    if not sys:IsInGame() then
+        GR.campaignId = 0
+        return
+    end
 
     local id = sys:GetCampaignId()
+    if id == 0 then
+        sys:EnsureCampaignId()
+        id = sys:GetCampaignId()
+    end
     local token = sys:GetSessionToken()
     if id ~= 0 and (id ~= GR.campaignId or token ~= GR.sessionToken) then
         GR.campaignId = id
@@ -510,6 +562,10 @@ local function refreshCampaign()
         GR.gigRolled = {}
         GR.encounterId = nil
         debugLog("Campana activa: " .. tostring(id))
+        -- Durante la pantalla de carga el juego aun no esta listo: esperar antes de tocar nada.
+        GR.warmup = 15
+        -- La jerarquia (y las cupulas de una campana nueva) en cuanto acaba la espera.
+        GR.hierarchyNow = true
     end
 end
 
@@ -527,6 +583,15 @@ end)
 registerForEvent("onUpdate", function(delta)
     refreshCampaign()
     if GR.campaignId == 0 then return end
+    if (GR.warmup or 0) > 0 then
+        GR.warmup = GR.warmup - delta
+        return
+    end
+    if GR.hierarchyNow then
+        GR.hierarchyNow = false
+        local ok, err = pcall(updateHierarchy)
+        if not ok then print("[GangRetaliation] Error en jerarquia: " .. tostring(err)) end
+    end
 
     -- Una vez por segundo: comprobar si los que huyen han escapado.
     GR.fleeTimer = (GR.fleeTimer or 0) + delta

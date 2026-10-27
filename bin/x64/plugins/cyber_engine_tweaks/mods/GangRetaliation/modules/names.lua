@@ -109,14 +109,18 @@ local function isFemale(gender)
     return gender == "Female"
 end
 
-function Names.generate(gang, gender, origin)
+-- taken = { [nombre] = true } con los que ya existen: se evitan (hay pocos alias por banda).
+function Names.generate(gang, gender, origin, taken)
     local pool = pools[gang] or pools.Maelstrom
     local name
-    if pool.style == "handle" then
-        name = pick(pool.handles)
-    else
-        local first = isFemale(gender) and pick(pool.female) or pick(pool.male)
-        name = first .. " " .. pick(pool.last)
+    for _ = 1, 30 do
+        if pool.style == "handle" then
+            name = pick(pool.handles)
+        else
+            local first = isFemale(gender) and pick(pool.female) or pick(pool.male)
+            name = first .. " " .. pick(pool.last)
+        end
+        if not (taken and taken[name]) then break end
     end
 
     local title = pick(titles[origin] or titles.escaped)
