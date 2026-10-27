@@ -1,17 +1,8 @@
-// Gang Retaliation - fase 1: deteccion de candidatos a Nemesis
-//
-// - Pandillero herido por V que sigue vivo (y consciente) cuando V sale de combate,
-//   con la vida por debajo del umbral -> "escaped".
-// - Ultimo pandillero en pie y malherido: huye gritando; si sobrevive -> "fled".
-//
-// Redscript solo detecta y encola eventos; la capa CET les da nombre y los guarda.
-
 module GangRetaliation
 
-// Pandillero al que V ha herido en el combate actual.
 public class GRCandidate {
     public let entityID: EntityID;
-    // >0 si es un Nemesis ya existente generado por el mod.
+
     public let nemesisId: Int32;
     public let gang: String;
     public let recordID: TweakDBID;
@@ -22,7 +13,6 @@ public class GRCandidate {
     public let fleeing: Bool;
 }
 
-// Evento que lee CET (solo tipos simples para que Lua los lea sin problemas).
 public class GRNemesisEvent {
     public let origin: String;
     public let nemesisId: Int32;
@@ -39,16 +29,16 @@ public class GRNemesisEvent {
 public class GRDetection extends ScriptableSystem {
     private let m_candidates: array<ref<GRCandidate>>;
     private let m_pending: array<ref<GRNemesisEvent>>;
-    // Entidades ya convertidas en esta sesion, para no duplicar.
+
     private let m_promoted: array<EntityID>;
-    // Pandilleros que han participado en el combate actual (golpeados por V o que golpearon a V).
+
     private let m_combatants: array<wref<ScriptedPuppet>>;
-    // Solo huye uno por combate.
+
     private let m_someoneFled: Bool;
-    // Pandilleros huyendo: se convierten en Nemesis cuando escapan de verdad.
+
     private let m_fleeing: array<ref<GRCandidate>>;
     private let m_fleeStart: array<Float>;
-    // Modo de huida (debug desde CET): 0 = correr lejos, 1 = miedo, 2 = ambos.
+
     private let m_fleeMode: Int32;
 
     public static func Get(gi: GameInstance) -> ref<GRDetection> {
@@ -56,13 +46,9 @@ public class GRDetection extends ScriptableSystem {
     }
 
     private func OnAttach() {
-        // Por defecto: correr lejos + miedo (probado en el juego, 2026-10-26).
         this.m_fleeMode = 2;
     }
 
-    // -------------------------------------------------------------------------
-    // Utilidades
-    // -------------------------------------------------------------------------
     public static func GetGang(npc: ref<ScriptedPuppet>) -> String {
         let record: wref<Character_Record> = npc.GetRecord();
         if !IsDefined(record) || !IsDefined(record.Affiliation()) {
@@ -86,7 +72,7 @@ public class GRDetection extends ScriptableSystem {
         if !IsDefined(npc) || npc.IsPlayer() || npc.IsCrowd() || npc.IsCharacterCivilian() {
             return false;
         }
-        // Jefes de mision y personajes unicos quedan fuera.
+
         let record: wref<Character_Record> = npc.GetRecord();
         if IsDefined(record) && IsDefined(record.Rarity()) {
             let rarity: gamedataNPCRarity = record.Rarity().Type();
@@ -97,7 +83,6 @@ public class GRDetection extends ScriptableSystem {
         return NotEquals(GRDetection.GetGang(npc), "");
     }
 
-    // Muerto, derribado o inconsciente.
     public static func IsNeutralized(npc: ref<ScriptedPuppet>) -> Bool {
         return !IsDefined(npc) || npc.IsDead() || ScriptedPuppet.IsDefeated(npc) || ScriptedPuppet.IsUnconscious(npc);
     }
@@ -165,7 +150,6 @@ public class GRDetection extends ScriptableSystem {
         return candidate;
     }
 
-    // Busca o crea el candidato y actualiza su vida y posicion.
     private func UpsertCandidate(npc: ref<ScriptedPuppet>) -> ref<GRCandidate> {
         let index: Int32 = this.FindCandidate(npc.GetEntityID());
         if index >= 0 {
@@ -195,15 +179,12 @@ public class GRDetection extends ScriptableSystem {
         this.m_someoneFled = false;
     }
 
-    // -------------------------------------------------------------------------
-    // Huida del ultimo en pie
-    // -------------------------------------------------------------------------
     private func CheckLastStanding() {
         let settings: ref<GRSettings> = GRSettings.Get(this.GetGameInstance());
         if this.m_someoneFled || !IsDefined(settings) || !settings.lastManFlees {
             return;
         }
-        // "Ultimo que queda": tiene que haber habido al menos dos pandilleros en la pelea.
+
         if ArraySize(this.m_combatants) < 2 {
             return;
         }
@@ -218,7 +199,7 @@ public class GRDetection extends ScriptableSystem {
         if alive != 1 {
             return;
         }
-        // Nunca con vehiculos de por medio: las ordenes de movimiento a un NPC montado son peligrosas.
+
         let gi: GameInstance = this.GetGameInstance();
         if VehicleComponent.IsMountedToVehicle(gi, last) || VehicleComponent.IsMountedToVehicle(gi, GetPlayer(gi)) {
             this.Debug("Huida cancelada: hay un vehiculo de por medio");
@@ -248,7 +229,6 @@ public class GRDetection extends ScriptableSystem {
         let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
         if IsDefined(puppet) && IsDefined(player) {
             if this.m_fleeMode == 0 || this.m_fleeMode == 2 {
-                // Deja de pelear y corre a un punto alejado de V.
                 puppet.GetAttitudeAgent().SetAttitudeTowards(player.GetAttitudeAgent(), EAIAttitude.AIA_Neutral);
                 let away: Vector4 = Vector4.Normalize(npc.GetWorldPosition() - player.GetWorldPosition());
                 let wp: WorldPosition;
@@ -267,7 +247,7 @@ public class GRDetection extends ScriptableSystem {
                 NPCPuppet.ChangeHighLevelState(puppet, gamedataNPCHighLevelState.Fear);
             }
         }
-        // Frase de miedo con su propia voz (si su voz no la tiene, no suena nada).
+
         GameObject.PlayVoiceOver(npc, n"fear_run", n"Scripts:GangRetaliation");
         this.SayFleeLine(npc, candidate.gang);
         this.Debug("Huye el ultimo en pie (modo " + IntToString(this.m_fleeMode) + "): " + candidate.gang + " vida " + FloatToString(candidate.health) + "%");
@@ -282,7 +262,6 @@ public class GRDetection extends ScriptableSystem {
         GRSpeech.Say(npc, loc.GetText("GR-Gang-" + gang), line, 5.0);
     }
 
-    // Lo llama CET cada segundo: decide si los que huyen han escapado.
     public func UpdateFleeing() {
         let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
         let i: Int32 = ArraySize(this.m_fleeing) - 1;
@@ -291,7 +270,6 @@ public class GRDetection extends ScriptableSystem {
             let npc: ref<ScriptedPuppet> = GameInstance.FindEntityByID(this.GetGameInstance(), candidate.entityID) as ScriptedPuppet;
             let done: Bool = false;
             if !IsDefined(npc) {
-                // Ha desaparecido del mundo: ha escapado.
                 this.Promote(candidate, "fled");
                 done = true;
             } else {
@@ -323,9 +301,6 @@ public class GRDetection extends ScriptableSystem {
         this.m_fleeMode = mode;
     }
 
-    // -------------------------------------------------------------------------
-    // Entradas desde los hooks
-    // -------------------------------------------------------------------------
     public func OnPlayerHitNPC(npc: ref<ScriptedPuppet>) {
         if !this.IsEnabled() || !GRDetection.IsEligible(npc) || this.WasPromoted(npc.GetEntityID()) {
             return;
@@ -363,7 +338,7 @@ public class GRDetection extends ScriptableSystem {
         while i < ArraySize(this.m_combatants) {
             if this.m_combatants[i] == npc {
                 ArrayErase(this.m_combatants, i);
-                // Sigue contando como participante para la regla de "al menos dos".
+
                 ArrayPush(this.m_combatants, null);
                 i = ArraySize(this.m_combatants);
             }
@@ -379,7 +354,7 @@ public class GRDetection extends ScriptableSystem {
             this.ResetFight();
             return;
         }
-        // Si el combate termina porque V ha muerto, nadie "escapa".
+
         if this.IsPlayerDead() {
             this.Debug("Fin de combate por muerte de V: sin huidas");
             return;
@@ -390,17 +365,16 @@ public class GRDetection extends ScriptableSystem {
             let npc: ref<ScriptedPuppet> = GameInstance.FindEntityByID(this.GetGameInstance(), candidate.entityID) as ScriptedPuppet;
             let neutralized: Bool = false;
             if IsDefined(npc) {
-                // Muerto, derribado o inconsciente: V lo ha neutralizado, no escapa.
                 neutralized = GRDetection.IsNeutralized(npc);
                 if !neutralized {
                     candidate.health = this.GetHealthPercent(npc);
                     candidate.position = npc.GetWorldPosition();
                 }
             }
-            // Si ya no existe (se alejo y desaparecio) se usan los ultimos datos conocidos.
+
             if !neutralized {
                 this.Debug("Fin de combate: " + candidate.gang + " vida " + FloatToString(candidate.health) + "%" + (candidate.fleeing ? " (huyendo)" : ""));
-                // Los que huyen los resuelve UpdateFleeing.
+
                 if !candidate.fleeing && candidate.health > 0.0 && candidate.health <= threshold {
                     this.Promote(candidate, "escaped");
                 }
@@ -409,9 +383,6 @@ public class GRDetection extends ScriptableSystem {
         this.ResetFight();
     }
 
-    // -------------------------------------------------------------------------
-    // Debug (desde la ventana de CET)
-    // -------------------------------------------------------------------------
     private func GetLookAtNPC() -> ref<ScriptedPuppet> {
         let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
         let target: ref<ScriptedPuppet> = GameInstance.GetTargetingSystem(this.GetGameInstance()).GetLookAtObject(player, false, false) as ScriptedPuppet;
@@ -422,7 +393,6 @@ public class GRDetection extends ScriptableSystem {
         return target;
     }
 
-    // Convierte en Nemesis al NPC al que apunta V.
     public func DebugPromoteLookAt() -> Bool {
         let target: ref<ScriptedPuppet> = this.GetLookAtNPC();
         if !IsDefined(target) {
@@ -432,7 +402,6 @@ public class GRDetection extends ScriptableSystem {
         return true;
     }
 
-    // Hace huir al NPC al que apunta V (sin comprobar vida ni companeros).
     public func DebugFleeLookAt() -> Bool {
         let target: ref<ScriptedPuppet> = this.GetLookAtNPC();
         if !IsDefined(target) {
@@ -464,9 +433,6 @@ public class GRDetection extends ScriptableSystem {
         GRLog("Nuevo Nemesis (" + origin + "): " + evt.gang + " " + evt.recordID);
     }
 
-    // -------------------------------------------------------------------------
-    // API para CET
-    // -------------------------------------------------------------------------
     public func GetPendingCount() -> Int32 {
         return ArraySize(this.m_pending);
     }
@@ -479,7 +445,6 @@ public class GRDetection extends ScriptableSystem {
         ArrayClear(this.m_pending);
     }
 
-    // Bandas que pelean contra V en este combate, separadas por comas (para los gigs).
     public func GetFightGangs() -> String {
         let result: String = "";
         for combatant in this.m_combatants {
@@ -507,16 +472,13 @@ public class GRDetection extends ScriptableSystem {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Hooks (mismas firmas que ya envuelven otros mods instalados)
-// -----------------------------------------------------------------------------
 @wrapMethod(HitReactionComponent)
 public func EvaluateHit(newHitEvent: ref<gameHitEvent>) -> Void {
     wrappedMethod(newHitEvent);
     if !IsDefined(newHitEvent) || !IsDefined(newHitEvent.attackData) {
         return;
     }
-    // Un pandillero hiere a V: se recuerda como posible asesino y como participante.
+
     if IsDefined(newHitEvent.target as PlayerPuppet) {
         let attacker: ref<ScriptedPuppet> = newHitEvent.attackData.GetInstigator() as ScriptedPuppet;
         if IsDefined(attacker) {
@@ -527,7 +489,7 @@ public func EvaluateHit(newHitEvent: ref<gameHitEvent>) -> Void {
         }
         return;
     }
-    // V hiere a un pandillero.
+
     if IsDefined(newHitEvent.attackData.GetInstigator() as PlayerPuppet) {
         let npc: ref<ScriptedPuppet> = newHitEvent.target as ScriptedPuppet;
         if IsDefined(npc) {

@@ -1,7 +1,3 @@
-// Gang Retaliation - fase 4: SMS del Nemesis
-// Aviso de SMS del juego sin archivos de diario: se reutiliza la cola de avisos del diario
-// (mismo patron que Dark Future con ItemsNotificationQueue). El mensaje no queda en el telefono.
-
 module GangRetaliation
 
 public class GRPhone extends ScriptableSystem {
@@ -15,9 +11,6 @@ public class GRPhone extends ScriptableSystem {
         this.m_queue = queue;
     }
 
-    // SMS que se queda en el telefono: activa el siguiente mensaje del hilo del contacto
-    // "Numero desconocido" (GangRetaliation.archive). Cuando se acaban, el hilo vuelve a empezar.
-    // Si falta el .archive, solo muestra el aviso con el texto de respaldo.
     public func SendThreat(from: String, fallbackText: String) -> Bool {
         let journal: ref<JournalManager> = GameInstance.GetJournalManager(this.GetGameInstance());
         let contact: String = "contacts/gr_unknown";
@@ -54,7 +47,6 @@ public class GRPhone extends ScriptableSystem {
         return (i < 10 ? "0" : "") + IntToString(i);
     }
 
-    // Solo aviso en pantalla. Devuelve false si la interfaz aun no esta lista.
     public func SendSms(from: String, text: String) -> Bool {
         if !IsDefined(this.m_queue) {
             GRLog("SMS: cola de avisos no disponible");

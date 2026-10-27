@@ -44,6 +44,19 @@ public class GRMenuData extends ScriptableSystem {
     private let m_vacancyGangs: array<String>;
     private let m_vacancyBoss: array<String>;
     private let m_vacancyLieutenant: array<String>;
+    // Fase 8: territorio (paralelos por distrito), fuerza de las bandas y rumores.
+    private let m_dKeys: array<String>;
+    private let m_dLabels: array<String>;
+    private let m_dRegions: array<String>;
+    private let m_dOwners: array<String>;
+    private let m_dInfluence: array<String>;
+    private let m_dWars: array<String>;
+    private let m_sGangs: array<String>;
+    private let m_sLabels: array<String>;
+    private let m_sValues: array<Int32>;
+    private let m_sNotes: array<String>;
+    private let m_rDays: array<String>;
+    private let m_rTexts: array<String>;
     // Ultima banda vista, para volver a ella al abrir la pantalla.
     private let m_page: Int32;
 
@@ -58,6 +71,18 @@ public class GRMenuData extends ScriptableSystem {
         ArrayClear(this.m_vacancyGangs);
         ArrayClear(this.m_vacancyBoss);
         ArrayClear(this.m_vacancyLieutenant);
+        ArrayClear(this.m_dKeys);
+        ArrayClear(this.m_dLabels);
+        ArrayClear(this.m_dRegions);
+        ArrayClear(this.m_dOwners);
+        ArrayClear(this.m_dInfluence);
+        ArrayClear(this.m_dWars);
+        ArrayClear(this.m_sGangs);
+        ArrayClear(this.m_sLabels);
+        ArrayClear(this.m_sValues);
+        ArrayClear(this.m_sNotes);
+        ArrayClear(this.m_rDays);
+        ArrayClear(this.m_rTexts);
     }
 
     // CET llama con pocos argumentos por llamada (con muchos, la llamada desde Lua crashea el juego):
@@ -119,6 +144,41 @@ public class GRMenuData extends ScriptableSystem {
         return "";
     }
 
+    // influence = "Banda|Nombre|valor,..." de mayor a menor; war = "Atacante|Defensor|fuerzaA|fuerzaD|dia|dias" o "".
+    public func AddDistrict(key: String, label: String, region: String, owner: String, influence: String, war: String) {
+        ArrayPush(this.m_dKeys, key);
+        ArrayPush(this.m_dLabels, label);
+        ArrayPush(this.m_dRegions, region);
+        ArrayPush(this.m_dOwners, owner);
+        ArrayPush(this.m_dInfluence, influence);
+        ArrayPush(this.m_dWars, war);
+    }
+
+    public func AddGangStrength(gang: String, label: String, value: Int32, note: String) {
+        ArrayPush(this.m_sGangs, gang);
+        ArrayPush(this.m_sLabels, label);
+        ArrayPush(this.m_sValues, value);
+        ArrayPush(this.m_sNotes, note);
+    }
+
+    public func AddRumor(day: String, text: String) {
+        ArrayPush(this.m_rDays, day);
+        ArrayPush(this.m_rTexts, text);
+    }
+
+    public func DistrictKeys() -> array<String> { return this.m_dKeys; }
+    public func DistrictLabels() -> array<String> { return this.m_dLabels; }
+    public func DistrictRegions() -> array<String> { return this.m_dRegions; }
+    public func DistrictOwners() -> array<String> { return this.m_dOwners; }
+    public func DistrictInfluence() -> array<String> { return this.m_dInfluence; }
+    public func DistrictWars() -> array<String> { return this.m_dWars; }
+    public func StrengthGangs() -> array<String> { return this.m_sGangs; }
+    public func StrengthLabels() -> array<String> { return this.m_sLabels; }
+    public func StrengthValues() -> array<Int32> { return this.m_sValues; }
+    public func StrengthNotes() -> array<String> { return this.m_sNotes; }
+    public func RumorDays() -> array<String> { return this.m_rDays; }
+    public func RumorTexts() -> array<String> { return this.m_rTexts; }
+
     public func GetGangs() -> array<String> {
         return this.m_gangs;
     }
@@ -169,6 +229,18 @@ public class GRNemesisMenuController extends gameuiMenuGameController {
     private let m_tabThreats: array<wref<inkRectangle>>;
     // Nemesis seleccionado (por nombre; los datos se rehacen cada pocos segundos).
     private let m_selName: String;
+    // Fase 8: 0 = bandas, 1 = territorio.
+    private let m_view: Int32;
+    private let m_gangSwitch: wref<inkHorizontalPanel>;
+    private let m_rankLabels: array<wref<inkText>>;
+    private let m_viewGangs: wref<inkText>;
+    private let m_viewTerritory: wref<inkText>;
+    private let m_territory: wref<inkCanvas>;
+    private let m_tDetail: wref<inkVerticalPanel>;
+    private let m_tKeys: array<String>;
+    private let m_tBorders: array<wref<GRBorder>>;
+    private let m_tAtWar: array<Bool>;
+    private let m_selDistrict: String;
 
     // Colores de la interfaz del juego (los mismos que Custom Perk Framework).
     private func Red() -> HDRColor {
@@ -251,6 +323,8 @@ public class GRNemesisMenuController extends gameuiMenuGameController {
         this.m_tree = tree;
 
         this.CreateDetail(root);
+        this.CreateTerritory(root);
+        this.CreateViewSwitch(root);
 
         let hints: ref<inkCanvas> = new inkCanvas();
         hints.SetName(n"button_hints");
@@ -261,10 +335,11 @@ public class GRNemesisMenuController extends gameuiMenuGameController {
         this.m_buttonHints = this.SpawnFromExternal(hints, r"base\\gameplay\\gui\\common\\buttonhints.inkwidget", n"Root").GetController() as ButtonHints;
         if IsDefined(this.m_buttonHints) {
             this.m_buttonHints.AddButtonHint(n"back", "Common-Access-Close");
+            this.m_buttonHints.AddButtonHint(n"sort_list", this.T("GR-MenuHintView"));
         }
 
         this.RegisterToGlobalInputCallback(n"OnPostOnRelease", this, n"OnGRGlobalInput");
-        this.Fill();
+        this.Refresh();
         super.OnInitialize();
         this.BringToFront();
     }
@@ -393,6 +468,7 @@ public class GRNemesisMenuController extends gameuiMenuGameController {
         header.SetFitToContent(true);
         header.SetChildMargin(new inkMargin(40.0, 0.0, 40.0, 0.0));
         header.Reparent(root);
+        this.m_gangSwitch = header;
 
         let left: ref<inkImage> = this.NewKeyIcon(n"kb_a");
         left.Reparent(header);
@@ -434,6 +510,7 @@ public class GRNemesisMenuController extends gameuiMenuGameController {
             label.SetAnchorPoint(new Vector2(0.0, 0.5));
             label.SetMargin(new inkMargin(120.0, this.TierY(3 - i), 0.0, 0.0));
             label.Reparent(root);
+            ArrayPush(this.m_rankLabels, label);
             i += 1;
         }
     }
@@ -950,7 +1027,8 @@ public class GRNemesisMenuController extends gameuiMenuGameController {
 
         // Rasgos completos.
         this.AddSection(panel, this.T("GR-MenuTraits"), 44.0);
-        for line in this.TraitLines(entry) {
+        let traitLines: array<String> = this.TraitLines(entry);
+        for line in traitLines {
             let parts: array<String> = StrSplit(line, "|");
             if ArraySize(parts) >= 3 {
                 // Sin descubrir: el texto ya empieza por "???".
@@ -1198,7 +1276,548 @@ public class GRNemesisMenuController extends gameuiMenuGameController {
         GRLog("Menu: no se encontro la pantalla en la capa de menus");
     }
 
+    // =========================================================================
+    // Fase 8: vista de territorio
+    // =========================================================================
+    private func GangColor(gang: String) -> HDRColor {
+        if Equals(gang, "TygerClaws") {
+            return new HDRColor(1.0, 0.37, 0.66, 1.0);
+        }
+        if Equals(gang, "Maelstrom") {
+            return this.Red();
+        }
+        if Equals(gang, "Valentinos") {
+            return this.Gold();
+        }
+        if Equals(gang, "SixthStreet") {
+            return new HDRColor(0.31, 0.55, 1.0, 1.0);
+        }
+        if Equals(gang, "Animals") {
+            return new HDRColor(0.48, 0.85, 0.36, 1.0);
+        }
+        if Equals(gang, "VoodooBoys") {
+            return new HDRColor(0.69, 0.49, 1.0, 1.0);
+        }
+        if Equals(gang, "Wraiths") {
+            return new HDRColor(1.0, 0.6, 0.24, 1.0);
+        }
+        if Equals(gang, "Scavengers") {
+            return new HDRColor(0.56, 0.6, 0.68, 1.0);
+        }
+        if Equals(gang, "Barghest") {
+            return new HDRColor(0.73, 0.69, 0.48, 1.0);
+        }
+        return this.Light();
+    }
+
+    // Cambia la primera aparicion de token por value ("%s", "%d").
+    private func Fmt(fmt: String, token: String, value: String) -> String {
+        let i: Int32 = StrFindFirst(fmt, token);
+        if i < 0 {
+            return fmt;
+        }
+        let after: Int32 = i + StrLen(token);
+        return StrLeft(fmt, i) + value + StrMid(fmt, after, StrLen(fmt) - after);
+    }
+
+    // [TAB] BANDAS | TERRITORIO, bajo el titulo. Clic en cualquiera de los dos tambien cambia.
+    private func CreateViewSwitch(root: ref<inkCompoundWidget>) {
+        let panel: ref<inkHorizontalPanel> = new inkHorizontalPanel();
+        panel.SetName(n"view_switch");
+        panel.SetAnchor(inkEAnchor.TopLeft);
+        panel.SetMargin(new inkMargin(120.0, 258.0, 0.0, 0.0));
+        panel.SetFitToContent(true);
+        panel.Reparent(root);
+
+        let key: ref<inkCompoundWidget> = this.NewTag("TAB", 22, this.Cyan());
+        key.SetMargin(new inkMargin(0.0, 0.0, 20.0, 0.0));
+        key.Reparent(panel);
+
+        let gangs: ref<inkText> = this.NewText(StrUpper(this.T("GR-MenuViewGangs")), 32, this.Grey(), n"Bold");
+        gangs.SetVAlign(inkEVerticalAlign.Center);
+        gangs.SetInteractive(true);
+        gangs.RegisterToCallback(n"OnRelease", this, n"OnGRViewGangsClick");
+        gangs.Reparent(panel);
+        this.m_viewGangs = gangs;
+
+        let sep: ref<inkText> = this.NewText("  |  ", 32, this.Dim(), n"Medium");
+        sep.SetVAlign(inkEVerticalAlign.Center);
+        sep.Reparent(panel);
+
+        let territory: ref<inkText> = this.NewText(StrUpper(this.T("GR-MenuViewTerritory")), 32, this.Grey(), n"Bold");
+        territory.SetVAlign(inkEVerticalAlign.Center);
+        territory.SetInteractive(true);
+        territory.RegisterToCallback(n"OnRelease", this, n"OnGRViewTerritoryClick");
+        territory.Reparent(panel);
+        this.m_viewTerritory = territory;
+    }
+
+    private func CreateTerritory(root: ref<inkCompoundWidget>) {
+        let territory: ref<inkCanvas> = new inkCanvas();
+        territory.SetName(n"territory");
+        territory.SetAnchor(inkEAnchor.Fill);
+        territory.SetVisible(false);
+        territory.Reparent(root);
+        this.m_territory = territory;
+    }
+
+    // Muestra una vista u otra (no rehace nada).
+    private func ShowView() {
+        let gangs: Bool = this.m_view == 0;
+        this.m_gangSwitch.SetVisible(gangs);
+        this.m_marks.SetVisible(gangs);
+        this.m_tree.SetVisible(gangs);
+        for label in this.m_rankLabels {
+            label.SetVisible(gangs);
+        }
+        if !gangs {
+            this.m_detail.SetVisible(false);
+        }
+        this.m_territory.SetVisible(!gangs);
+        this.m_viewGangs.SetTintColor(gangs ? this.Cyan() : this.Grey());
+        this.m_viewTerritory.SetTintColor(gangs ? this.Grey() : this.Cyan());
+    }
+
+    private func Refresh() {
+        this.ShowView();
+        if this.m_view == 1 {
+            this.FillTerritory();
+        } else {
+            this.Fill();
+        }
+    }
+
+    private func ToggleView() {
+        this.m_view = 1 - this.m_view;
+        this.Refresh();
+        this.BringToFront();
+        this.PlaySound(n"Button", n"OnPress");
+    }
+
+    protected cb func OnGRViewGangsClick(evt: ref<inkPointerEvent>) -> Bool {
+        if evt.IsAction(n"click") && this.m_view != 0 {
+            this.ToggleView();
+        }
+    }
+
+    protected cb func OnGRViewTerritoryClick(evt: ref<inkPointerEvent>) -> Bool {
+        if evt.IsAction(n"click") && this.m_view != 1 {
+            this.ToggleView();
+        }
+    }
+
+    // Texto en una posicion fija del lienzo de territorio.
+    private func PlaceText(parent: ref<inkCompoundWidget>, text: String, size: Int32, color: HDRColor, style: CName, x: Float, y: Float) -> ref<inkText> {
+        let label: ref<inkText> = this.NewText(text, size, color, style);
+        label.SetAnchor(inkEAnchor.TopLeft);
+        label.SetMargin(new inkMargin(x, y, 0.0, 0.0));
+        label.Reparent(parent);
+        return label;
+    }
+
+    private func PlaceRect(parent: ref<inkCompoundWidget>, x: Float, y: Float, w: Float, h: Float, color: HDRColor, opacity: Float) {
+        let rect: ref<inkRectangle> = this.NewRect(w, h, color, opacity);
+        rect.SetAnchor(inkEAnchor.TopLeft);
+        rect.SetMargin(new inkMargin(x, y, 0.0, 0.0));
+        rect.Reparent(parent);
+    }
+
+    // Barra con un tramo por banda ("Banda|Nombre|valor,...").
+    private func NewInfluenceBar(influence: String, width: Float, height: Float) -> ref<inkHorizontalPanel> {
+        let bar: ref<inkHorizontalPanel> = new inkHorizontalPanel();
+        let parts: array<String> = StrSplit(influence, ",");
+        let gap: Float = 3.0;
+        let usable: Float = width - gap * Cast<Float>(Max(0, ArraySize(parts) - 1));
+        for part in parts {
+            let fields: array<String> = StrSplit(part, "|");
+            if ArraySize(fields) >= 3 {
+                let value: Float = Cast<Float>(StringToInt(fields[2]));
+                if value > 0.0 {
+                    let seg: ref<inkRectangle> = this.NewRect(usable * value / 100.0, height, this.GangColor(fields[0]), 1.0);
+                    seg.SetMargin(new inkMargin(0.0, 0.0, gap, 0.0));
+                    seg.Reparent(bar);
+                }
+            }
+        }
+        return bar;
+    }
+
+    // Nombre visible de una banda dentro de la influencia del distrito.
+    private func InfluenceLabel(influence: String, gang: String) -> String {
+        let influenceParts: array<String> = StrSplit(influence, ",");
+        for part in influenceParts {
+            let fields: array<String> = StrSplit(part, "|");
+            if ArraySize(fields) >= 2 && Equals(fields[0], gang) {
+                return fields[1];
+            }
+        }
+        return gang;
+    }
+
+    private func StyleDistrict(index: Int32, selected: Bool) {
+        let border: wref<GRBorder> = this.m_tBorders[index];
+        if selected {
+            border.SetTintColor(this.Cyan());
+            border.SetThickness(3.0);
+            border.SetOpacity(1.0);
+        } else {
+            border.SetTintColor(this.m_tAtWar[index] ? this.Red() : this.Dim());
+            border.SetThickness(2.0);
+            border.SetOpacity(this.m_tAtWar[index] ? 0.85 : 0.7);
+        }
+    }
+
+    private func AddDistrictRow(column: ref<inkVerticalPanel>, index: Int32, label: String, owner: String, influence: String, atWar: Bool) {
+        let row: ref<inkCanvas> = new inkCanvas();
+        row.SetName(StringToName("gr_dist_" + IntToString(index)));
+        row.SetSize(new Vector2(601.0, 98.0));
+        row.SetMargin(new inkMargin(0.0, 0.0, 0.0, 12.0));
+        row.SetInteractive(true);
+        row.RegisterToCallback(n"OnRelease", this, n"OnGRDistrictClick");
+        row.Reparent(column);
+        this.AddFill(row, this.Dark(), 0.9);
+
+        let border: ref<GRBorder> = new GRBorder();
+        border.SetAnchor(inkEAnchor.Fill);
+        border.Reparent(row);
+        ArrayPush(this.m_tBorders, border);
+        ArrayPush(this.m_tAtWar, atWar);
+
+        this.PlaceText(row, label, 34, this.Light(), n"Bold", 18.0, 6.0);
+        if atWar {
+            let tag: ref<inkCompoundWidget> = this.NewTag(this.T("GR-MenuAtWar"), 20, this.Red());
+            tag.SetAnchor(inkEAnchor.TopRight);
+            tag.SetAnchorPoint(new Vector2(1.0, 0.0));
+            tag.SetMargin(new inkMargin(0.0, 12.0, 14.0, 0.0));
+            tag.Reparent(row);
+        }
+        this.PlaceText(row, StrUpper(this.InfluenceLabel(influence, owner)), 24, this.GangColor(owner), n"Bold", 18.0, 48.0);
+        let bar: ref<inkHorizontalPanel> = this.NewInfluenceBar(influence, 565.0, 8.0);
+        bar.SetAnchor(inkEAnchor.TopLeft);
+        bar.SetMargin(new inkMargin(18.0, 80.0, 0.0, 0.0));
+        bar.Reparent(row);
+    }
+
+    private func FillTerritory() {
+        this.m_territory.RemoveAllChildren();
+        ArrayClear(this.m_tKeys);
+        ArrayClear(this.m_tBorders);
+        ArrayClear(this.m_tAtWar);
+        if !IsDefined(this.m_data) {
+            return;
+        }
+        let keys: array<String> = this.m_data.DistrictKeys();
+        let labels: array<String> = this.m_data.DistrictLabels();
+        let regions: array<String> = this.m_data.DistrictRegions();
+        let owners: array<String> = this.m_data.DistrictOwners();
+        let influence: array<String> = this.m_data.DistrictInfluence();
+        let wars: array<String> = this.m_data.DistrictWars();
+        let count: Int32 = ArraySize(keys);
+
+        let title: ref<inkText> = this.NewText(StrUpper(this.T("GR-MenuViewTerritory")), 72, this.Cyan(), n"Medium");
+        title.SetAnchor(inkEAnchor.TopCenter);
+        title.SetAnchorPoint(new Vector2(0.5, 0.0));
+        title.SetMargin(new inkMargin(0.0, 168.0, 0.0, 0.0));
+        title.Reparent(this.m_territory);
+
+        if count == 0 {
+            this.m_summary.SetText("");
+            let empty: ref<inkText> = this.NewText(this.T("GR-MenuNoTerritory"), 44, this.Grey(), n"Regular");
+            empty.SetAnchor(inkEAnchor.Centered);
+            empty.SetAnchorPoint(new Vector2(0.5, 0.5));
+            empty.Reparent(this.m_territory);
+            return;
+        }
+
+        // Leyenda: un color por banda.
+        let legend: ref<inkHorizontalPanel> = new inkHorizontalPanel();
+        legend.SetAnchor(inkEAnchor.TopCenter);
+        legend.SetAnchorPoint(new Vector2(0.5, 0.0));
+        legend.SetMargin(new inkMargin(0.0, 276.0, 0.0, 0.0));
+        legend.SetFitToContent(true);
+        legend.Reparent(this.m_territory);
+        let sGangs: array<String> = this.m_data.StrengthGangs();
+        let sLabels: array<String> = this.m_data.StrengthLabels();
+        let i: Int32 = 0;
+        while i < ArraySize(sGangs) {
+            let swatch: ref<inkRectangle> = this.NewRect(22.0, 22.0, this.GangColor(sGangs[i]), 1.0);
+            swatch.SetVAlign(inkEVerticalAlign.Center);
+            swatch.SetMargin(new inkMargin(i > 0 ? 44.0 : 0.0, 0.0, 12.0, 0.0));
+            swatch.Reparent(legend);
+            let name: ref<inkText> = this.NewText(StrUpper(sLabels[i]), 24, this.Light(), n"Medium");
+            name.SetVAlign(inkEVerticalAlign.Center);
+            name.Reparent(legend);
+            i += 1;
+        }
+
+        // Distrito seleccionado: el de antes, o el primero en guerra, o el primero.
+        let selected: Int32 = -1;
+        let warCount: Int32 = 0;
+        i = 0;
+        while i < count {
+            if StrLen(wars[i]) > 0 {
+                warCount += 1;
+                if selected < 0 {
+                    selected = i;
+                }
+            }
+            i += 1;
+        }
+        i = 0;
+        while i < count {
+            if Equals(keys[i], this.m_selDistrict) {
+                selected = i;
+            }
+            i += 1;
+        }
+        if selected < 0 {
+            selected = 0;
+        }
+        this.m_selDistrict = keys[selected];
+        this.m_summary.SetText(this.T("GR-MenuWars") + " " + IntToString(warCount) + "   |   " + this.T("GR-MenuDistricts") + " " + IntToString(count));
+
+        // Zonas en 4 columnas, cada una con sus distritos.
+        let columns: array<ref<inkVerticalPanel>>;
+        let c: Int32 = 0;
+        while c < 4 {
+            let column: ref<inkVerticalPanel> = new inkVerticalPanel();
+            column.SetAnchor(inkEAnchor.TopLeft);
+            column.SetMargin(new inkMargin(120.0 + Cast<Float>(c) * 633.0, 380.0, 0.0, 0.0));
+            column.Reparent(this.m_territory);
+            ArrayPush(columns, column);
+            c += 1;
+        }
+        let seen: array<String>;
+        i = 0;
+        while i < count {
+            if !ArrayContains(seen, regions[i]) {
+                ArrayPush(seen, regions[i]);
+            }
+            i += 1;
+        }
+        let r: Int32 = 0;
+        while r < ArraySize(seen) {
+            let column: ref<inkVerticalPanel> = columns[r % 4];
+            let heading: ref<inkText> = this.NewText(StrUpper(seen[r]), 26, this.Light(), n"Bold");
+            heading.SetMargin(new inkMargin(0.0, r >= 4 ? 22.0 : 0.0, 0.0, 10.0));
+            heading.Reparent(column);
+            i = 0;
+            while i < count {
+                if Equals(regions[i], seen[r]) {
+                    ArrayPush(this.m_tKeys, keys[i]);
+                    this.AddDistrictRow(column, ArraySize(this.m_tKeys) - 1, labels[i], owners[i], influence[i], StrLen(wars[i]) > 0);
+                }
+                i += 1;
+            }
+            r += 1;
+        }
+        i = 0;
+        while i < ArraySize(this.m_tKeys) {
+            this.StyleDistrict(i, Equals(this.m_tKeys[i], this.m_selDistrict));
+            i += 1;
+        }
+
+        this.FillGangStrength();
+
+        // Panel de detalle a la derecha.
+        let detail: ref<inkCanvas> = new inkCanvas();
+        detail.SetAnchor(inkEAnchor.TopLeft);
+        detail.SetMargin(new inkMargin(2720.0, 392.0, 0.0, 0.0));
+        detail.SetSize(new Vector2(1000.0, 1560.0));
+        detail.Reparent(this.m_territory);
+        this.AddFill(detail, this.Panel(), 0.95);
+        this.AddBorder(detail, this.Red(), 2.0, 0.45);
+        let content: ref<inkVerticalPanel> = new inkVerticalPanel();
+        content.SetAnchor(inkEAnchor.Fill);
+        content.SetMargin(new inkMargin(56.0, 48.0, 56.0, 48.0));
+        content.Reparent(detail);
+        this.m_tDetail = content;
+        this.FillDistrictDetail(selected);
+    }
+
+    // Fuerza de las bandas, en 3 columnas bajo los distritos.
+    private func FillGangStrength() {
+        let gangs: array<String> = this.m_data.StrengthGangs();
+        let labels: array<String> = this.m_data.StrengthLabels();
+        let values: array<Int32> = this.m_data.StrengthValues();
+        let notes: array<String> = this.m_data.StrengthNotes();
+        let top: Float = 1640.0;
+        this.PlaceText(this.m_territory, StrUpper(this.T("GR-MenuGangStrength")), 30, this.Light(), n"Bold", 120.0, top);
+        this.PlaceRect(this.m_territory, 520.0, top + 18.0, 2000.0, 2.0, this.Dim(), 1.0);
+        let max: Int32 = 1;
+        for value in values {
+            max = Max(max, value);
+        }
+        let i: Int32 = 0;
+        while i < ArraySize(gangs) {
+            let x: Float = 120.0 + Cast<Float>(i % 3) * 840.0;
+            let y: Float = top + 62.0 + Cast<Float>(i / 3) * 84.0;
+            this.PlaceText(this.m_territory, labels[i], 28, this.GangColor(gangs[i]), n"Bold", x, y);
+            this.PlaceRect(this.m_territory, x + 230.0, y + 12.0, 460.0, 14.0, this.Empty(), 1.0);
+            this.PlaceRect(this.m_territory, x + 230.0, y + 12.0, 460.0 * Cast<Float>(values[i]) / Cast<Float>(max), 14.0, this.GangColor(gangs[i]), 1.0);
+            this.PlaceText(this.m_territory, IntToString(values[i]), 30, this.Light(), n"Bold", x + 710.0, y);
+            if StrLen(notes[i]) > 0 {
+                this.PlaceText(this.m_territory, this.T("GR-MenuWeakened") + "  " + notes[i], 20, this.Red(), n"Bold", x + 230.0, y + 34.0);
+            }
+            i += 1;
+        }
+    }
+
+    private func FillDistrictDetail(index: Int32) {
+        let panel: ref<inkVerticalPanel> = this.m_tDetail;
+        panel.RemoveAllChildren();
+        let keys: array<String> = this.m_data.DistrictKeys();
+        let pos: Int32 = -1;
+        let i: Int32 = 0;
+        while i < ArraySize(keys) {
+            if Equals(keys[i], this.m_tKeys[index]) {
+                pos = i;
+            }
+            i += 1;
+        }
+        if pos < 0 {
+            return;
+        }
+        // Copias locales: indexar directamente el resultado de una funcion devolvia textos basura.
+        let labels: array<String> = this.m_data.DistrictLabels();
+        let regions: array<String> = this.m_data.DistrictRegions();
+        let owners: array<String> = this.m_data.DistrictOwners();
+        let influences: array<String> = this.m_data.DistrictInfluence();
+        let wars: array<String> = this.m_data.DistrictWars();
+        let label: String = labels[pos];
+        let region: String = regions[pos];
+        let owner: String = owners[pos];
+        let influence: String = influences[pos];
+        let war: String = wars[pos];
+        let width: Float = 888.0;
+
+        this.NewText(StrUpper(this.T("GR-MenuDistrict")) + "  |  " + StrUpper(region), 24, this.Cyan(), n"Bold").Reparent(panel);
+        let name: ref<inkText> = this.NewWrappedText(label, 66, this.Light(), width);
+        name.SetFontStyle(n"Bold");
+        name.Reparent(panel);
+        this.NewText(this.T("GR-MenuControls") + ": " + StrUpper(this.InfluenceLabel(influence, owner)), 34, this.GangColor(owner), n"Bold").Reparent(panel);
+
+        // Influencia de cada banda.
+        this.AddSection(panel, this.T("GR-MenuInfluence"), 36.0);
+        let influenceParts: array<String> = StrSplit(influence, ",");
+        for part in influenceParts {
+            let fields: array<String> = StrSplit(part, "|");
+            if ArraySize(fields) >= 3 {
+                let value: Int32 = StringToInt(fields[2]);
+                let row: ref<inkCanvas> = new inkCanvas();
+                row.SetSize(new Vector2(width, 46.0));
+                row.Reparent(panel);
+                this.PlaceText(row, fields[1], 30, this.GangColor(fields[0]), n"Bold", 0.0, 0.0);
+                this.PlaceRect(row, 250.0, 12.0, 520.0, 18.0, this.Empty(), 1.0);
+                this.PlaceRect(row, 250.0, 12.0, 520.0 * Cast<Float>(value) / 100.0, 18.0, this.GangColor(fields[0]), 1.0);
+                this.PlaceText(row, IntToString(value) + "%", 30, this.Light(), n"Bold", 800.0, 0.0);
+            }
+        }
+
+        // Guerra: quien ataca y quien defiende, fuerzas y tendencia.
+        let w: array<String> = StrSplit(war, "|");
+        if ArraySize(w) >= 6 {
+            let attacker: String = w[0];
+            let defender: String = w[1];
+            let sa: Int32 = StringToInt(w[2]);
+            let sd: Int32 = StringToInt(w[3]);
+            let aName: String = this.InfluenceLabel(influence, attacker);
+            let dName: String = this.InfluenceLabel(influence, defender);
+            let box: ref<inkCanvas> = new inkCanvas();
+            box.SetSize(new Vector2(width, 360.0));
+            box.SetMargin(new inkMargin(0.0, 36.0, 0.0, 0.0));
+            box.Reparent(panel);
+            this.AddFill(box, new HDRColor(0.1, 0.06, 0.09, 1.0), 0.95);
+            this.AddBorder(box, this.Red(), 2.0, 1.0);
+            this.PlaceText(box, this.T("GR-MenuAtWar"), 28, this.Red(), n"Bold", 28.0, 20.0);
+            let day: ref<inkText> = this.NewText(this.Fmt(this.Fmt(this.T("GR-MenuWarDay"), "%d", w[4]), "%d", w[5]), 24, this.Light(), n"Medium");
+            day.SetAnchor(inkEAnchor.TopRight);
+            day.SetAnchorPoint(new Vector2(1.0, 0.0));
+            day.SetMargin(new inkMargin(0.0, 24.0, 28.0, 0.0));
+            day.Reparent(box);
+
+            this.PlaceText(box, this.T("GR-MenuAttacks"), 20, this.Grey(), n"Bold", 28.0, 76.0);
+            this.PlaceText(box, aName, 40, this.GangColor(attacker), n"Bold", 28.0, 100.0);
+            this.PlaceText(box, this.T("GR-MenuStrength") + " " + IntToString(sa), 28, this.Light(), n"Regular", 28.0, 150.0);
+            this.PlaceText(box, "VS", 28, this.Grey(), n"Bold", 426.0, 112.0);
+            let rightTexts: array<String> = [this.T("GR-MenuDefends"), dName, this.T("GR-MenuStrength") + " " + IntToString(sd)];
+            let rightSizes: array<Int32> = [20, 40, 28];
+            let rightY: array<Float> = [76.0, 100.0, 150.0];
+            let k: Int32 = 0;
+            while k < 3 {
+                let t: ref<inkText> = this.NewText(rightTexts[k], rightSizes[k], k == 1 ? this.GangColor(defender) : (k == 0 ? this.Grey() : this.Light()), k == 2 ? n"Regular" : n"Bold");
+                t.SetAnchor(inkEAnchor.TopRight);
+                t.SetAnchorPoint(new Vector2(1.0, 0.0));
+                t.SetMargin(new inkMargin(0.0, rightY[k], 28.0, 0.0));
+                t.Reparent(box);
+                k += 1;
+            }
+            let share: Float = Cast<Float>(sa) / Cast<Float>(Max(1, sa + sd));
+            this.PlaceRect(box, 28.0, 204.0, 832.0 * share, 14.0, this.GangColor(attacker), 1.0);
+            this.PlaceRect(box, 28.0 + 832.0 * share + 4.0, 204.0, MaxF(0.0, 832.0 * (1.0 - share) - 4.0), 14.0, this.GangColor(defender), 1.0);
+            let trend: String = sa > sd ? this.Fmt(this.T("GR-MenuWarGaining"), "%s", aName) : this.Fmt(this.T("GR-MenuWarHolding"), "%s", dName);
+            let trendText: ref<inkText> = this.NewWrappedText(trend, 30, this.Light(), 832.0);
+            trendText.SetAnchor(inkEAnchor.TopLeft);
+            trendText.SetMargin(new inkMargin(28.0, 236.0, 0.0, 0.0));
+            trendText.Reparent(box);
+            let note: ref<inkText> = this.NewWrappedText(this.T("GR-MenuWarSkirmish"), 24, this.Grey(), 832.0);
+            note.SetAnchor(inkEAnchor.TopLeft);
+            note.SetMargin(new inkMargin(28.0, 286.0, 0.0, 0.0));
+            note.Reparent(box);
+        } else {
+            let calm: ref<inkText> = this.NewWrappedText(this.T("GR-MenuNoWar"), 30, this.Light(), width);
+            calm.SetMargin(new inkMargin(0.0, 36.0, 0.0, 0.0));
+            calm.Reparent(panel);
+        }
+
+        // Rumores recientes.
+        this.AddSection(panel, this.T("GR-MenuRumors"), 44.0);
+        let days: array<String> = this.m_data.RumorDays();
+        let texts: array<String> = this.m_data.RumorTexts();
+        if ArraySize(texts) == 0 {
+            this.NewWrappedText(this.T("GR-MenuNoRumors"), 28, this.Grey(), width).Reparent(panel);
+        }
+        i = 0;
+        while i < Min(ArraySize(texts), 5) {
+            let line: ref<inkHorizontalPanel> = new inkHorizontalPanel();
+            line.SetMargin(new inkMargin(0.0, 0.0, 0.0, 10.0));
+            line.Reparent(panel);
+            let dayText: ref<inkText> = this.NewText(days[i], 22, this.Grey(), n"Bold");
+            dayText.SetMargin(new inkMargin(0.0, 4.0, 18.0, 0.0));
+            dayText.Reparent(line);
+            this.NewWrappedText(texts[i], 28, this.Light(), 740.0).Reparent(line);
+            i += 1;
+        }
+    }
+
+    protected cb func OnGRDistrictClick(evt: ref<inkPointerEvent>) -> Bool {
+        if !evt.IsAction(n"click") {
+            return false;
+        }
+        let target: CName = evt.GetCurrentTarget().GetName();
+        let i: Int32 = 0;
+        while i < ArraySize(this.m_tKeys) {
+            if Equals(target, StringToName("gr_dist_" + IntToString(i))) {
+                this.m_selDistrict = this.m_tKeys[i];
+                let j: Int32 = 0;
+                while j < ArraySize(this.m_tKeys) {
+                    this.StyleDistrict(j, j == i);
+                    j += 1;
+                }
+                this.FillDistrictDetail(i);
+                this.BringToFront();
+                this.PlaySound(n"Button", n"OnPress");
+                return true;
+            }
+            i += 1;
+        }
+        return false;
+    }
+
     private func ChangePage(delta: Int32) {
+        if this.m_view == 1 {
+            return;
+        }
         this.m_page += delta;
         this.m_selName = "";
         this.Fill();
@@ -1262,6 +1881,12 @@ public class GRNemesisMenuController extends gameuiMenuGameController {
     protected cb func OnGRGlobalInput(evt: ref<inkPointerEvent>) -> Bool {
         if evt.IsHandled() {
             return false;
+        }
+        // TAB (sort_list, como "Ordenar" en el Diario): bandas <-> territorio.
+        if evt.IsAction(n"sort_list") {
+            this.ToggleView();
+            evt.Handle();
+            return true;
         }
         if evt.IsAction(n"option_switch_prev") {
             this.ChangePage(-1);

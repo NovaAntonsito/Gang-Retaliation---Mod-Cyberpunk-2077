@@ -1,13 +1,8 @@
-// Gang Retaliation - fase 4: frases del Nemesis en combate
-// Comenta cuando actua uno de sus rasgos, cuando le queda poca vida y cuando V esta malherida.
-// Se muestran sobre su cabeza con GRSpeech. Las claves son "GR-Taunt-<evento>-<n>" (Localization.reds).
-
 module GangRetaliation
 
 public class GRTaunts extends ScriptableSystem {
-    // Una frase cada pocos segundos como mucho, para no tapar el combate.
     private let m_lastTaunt: Float;
-    // Nemesis que ya han dicho su frase de poca vida en este encuentro.
+
     private let m_lowSaid: array<EntityID>;
     private let m_playerLowSaid: Bool;
 
@@ -23,7 +18,6 @@ public class GRTaunts extends ScriptableSystem {
         return GameInstance.GetStatPoolsSystem(this.GetGameInstance()).GetStatPoolValue(Cast<StatsObjectID>(obj.GetEntityID()), gamedataStatPoolType.Health, true);
     }
 
-    // Dice una variante al azar de "key" (key-1 .. key-variants) si ha pasado la espera.
     private func Say(npc: ref<GameObject>, key: String, variants: Int32, cooldown: Float, chance: Float) -> Bool {
         let spawner: ref<GRSpawner> = GRSpawner.Get(this.GetGameInstance());
         let system: ref<GRSystem> = GRSystem.Get(this.GetGameInstance());
@@ -48,7 +42,6 @@ public class GRTaunts extends ScriptableSystem {
         return true;
     }
 
-    // Ha actuado un rasgo. "deadly" lo dice quien golpea a V; el resto, el Nemesis golpeado.
     public static func OnTrait(hitEvent: ref<gameHitEvent>, trait: String) {
         let speaker: ref<GameObject> = Equals(trait, "deadly") ? hitEvent.attackData.GetInstigator() : hitEvent.target;
         if !IsDefined(speaker) {
@@ -60,14 +53,12 @@ public class GRTaunts extends ScriptableSystem {
         }
     }
 
-    // Lo llama GRSpawner.Tick cada segundo con cada Nemesis generado y vivo.
     public func CheckHealth(npc: ref<ScriptedPuppet>) {
         let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
         if !IsDefined(player) || !player.IsInCombat() {
             return;
         }
         if !ArrayContains(this.m_lowSaid, npc.GetEntityID()) && this.HealthPercent(npc) < 30.0 {
-            // Sin espera: es el momento mas importante del combate.
             if this.Say(npc, "GR-Taunt-Low", 3, 0.0, 1.0) {
                 ArrayPush(this.m_lowSaid, npc.GetEntityID());
             }
@@ -79,7 +70,6 @@ public class GRTaunts extends ScriptableSystem {
         }
     }
 
-    // Fin del encuentro.
     public func Reset() {
         ArrayClear(this.m_lowSaid);
         this.m_playerLowSaid = false;

@@ -1,7 +1,3 @@
--- Gang Retaliation - generador de nombres y titulos de Nemesis
--- Cada banda tiene su estilo. Los titulos se guardan en ES y EN para que el
--- Nemesis conserve el mismo apodo aunque se cambie el idioma del juego.
-
 local Names = {}
 
 Names.gangLabels = {
@@ -16,7 +12,6 @@ Names.gangLabels = {
     Barghest = "Barghest",
 }
 
--- style: "full" = nombre + apellido, "handle" = solo alias callejero
 local pools = {
     Maelstrom = {
         style = "handle",
@@ -68,7 +63,6 @@ local pools = {
     },
 }
 
--- Titulos segun el origen. es_f = forma femenina en espanol cuando cambia.
 local titles = {
     escaped = {
         { en = "the Survivor", es = "el Superviviente", es_f = "la Superviviente" },
@@ -91,7 +85,7 @@ titles.fled = {
     { en = "Runaway", es = "el Prófugo", es_f = "la Prófuga" },
 }
 titles.debug = titles.escaped
--- Reclutados por la jerarquia para cubrir un puesto vacante.
+
 titles.promoted = {
     { en = "the Heir", es = "el Heredero", es_f = "la Heredera" },
     { en = "the Usurper", es = "el Usurpador", es_f = "la Usurpadora" },
@@ -101,7 +95,6 @@ titles.promoted = {
     { en = "the Enforcer", es = "el Ejecutor", es_f = "la Ejecutora" },
 }
 
--- Fase 7: vuelve de la muerte reconstruido con cyberware.
 titles.returned = {
     { en = "the Rebuilt", es = "el Reconstruido", es_f = "la Reconstruida" },
     { en = "Scrap", es = "Chatarra" },
@@ -119,7 +112,6 @@ local function isFemale(gender)
     return gender == "Female"
 end
 
--- taken = { [nombre] = true } con los que ya existen: se evitan (hay pocos alias por banda).
 function Names.generate(gang, gender, origin, taken)
     local pool = pools[gang] or pools.Maelstrom
     local name
@@ -133,6 +125,14 @@ function Names.generate(gang, gender, origin, taken)
         if not (taken and taken[name]) then break end
     end
 
+    if taken and taken[name] then
+        local base, numerals = name, { "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X" }
+        for _, numeral in ipairs(numerals) do
+            name = base .. " " .. numeral
+            if not taken[name] then break end
+        end
+    end
+
     local title = pick(titles[origin] or titles.escaped)
     local titleEs = title.es
     if isFemale(gender) and title.es_f then titleEs = title.es_f end
@@ -140,8 +140,6 @@ function Names.generate(gang, gender, origin, taken)
     return name, title.en, titleEs
 end
 
--- Nombre completo para mostrar: Static "the Survivor" / Static "el Superviviente"
--- Titulo nuevo de un Nemesis que vuelve de la muerte (conserva el nombre). Devuelve en, es.
 function Names.returnedTitle(gender)
     local title = pick(titles.returned)
     local es = (isFemale(gender) and title.es_f) or title.es

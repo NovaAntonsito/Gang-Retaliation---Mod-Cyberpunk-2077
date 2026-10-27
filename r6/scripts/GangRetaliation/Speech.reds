@@ -1,7 +1,3 @@
-// Gang Retaliation - frases de NPC con el sistema de dialogo del juego
-// Se muestran sobre la cabeza del NPC, igual que las frases normales de los NPC.
-// El juego no siempre las quita al acabar su duracion, asi que se ocultan a mano (Tick desde CET).
-
 module GangRetaliation
 
 public class GRSpeech extends ScriptableSystem {
@@ -52,7 +48,6 @@ public class GRSpeech extends ScriptableSystem {
         GameInstance.GetBlackboardSystem(this.GetGameInstance()).Get(defs.UIGameData).SetVariant(defs.UIGameData.HideDialogLine, ToVariant(ids), true);
     }
 
-    // Lo llama CET cada segundo.
     public func Tick() {
         let now: Float = this.Now();
         let i: Int32 = ArraySize(this.m_ids) - 1;
@@ -66,7 +61,6 @@ public class GRSpeech extends ScriptableSystem {
         }
     }
 
-    // Por si acaso: quita todas las frases del mod (boton de debug).
     public func HideAll() {
         for id in this.m_ids {
             this.Hide(id);

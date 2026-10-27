@@ -1,18 +1,11 @@
-// Gang Retaliation - fase 3: rasgos de los Nemesis
-//
-// Cada Nemesis generado por el mod tiene rasgos (fortalezas y debilidades) que
-// cambian el dano que recibe o hace. CET los elige y los guarda; aqui solo se aplican.
-// Se descubren al escanearlo o cuando el rasgo actua en combate por primera vez.
-
 module GangRetaliation
 
 public class GRTraits extends ScriptableSystem {
-    // Rasgos por Nemesis: m_traits[i] = "fireproof,weak_melee" para m_nemesisIDs[i].
     private let m_nemesisIDs: array<Int32>;
     private let m_traits: array<array<String>>;
-    // Descubrimientos pendientes para CET: "id:trait" o "id:scan".
+
     private let m_reveals: array<String>;
-    // Ya avisados en esta sesion, para no repetir en cada golpe.
+
     private let m_shown: array<String>;
 
     public static func Get(gi: GameInstance) -> ref<GRTraits> {
@@ -30,7 +23,6 @@ public class GRTraits extends ScriptableSystem {
         return -1;
     }
 
-    // CET lo llama antes de generar al Nemesis. csv = "fireproof,weak_melee".
     public func SetTraits(nemesisId: Int32, csv: String) {
         let list: array<String> = StrSplit(csv, ",");
         let index: Int32 = this.IndexOf(nemesisId);
@@ -66,9 +58,6 @@ public class GRTraits extends ScriptableSystem {
         ArrayPush(this.m_reveals, key);
     }
 
-    // -------------------------------------------------------------------------
-    // Dano
-    // -------------------------------------------------------------------------
     private static func DamageOf(hitEvent: ref<gameHitEvent>, type: gamedataDamageType) -> Float {
         let values: array<Float> = hitEvent.attackComputed.GetAttackValues();
         let index: Int32 = EnumInt(type);
@@ -78,7 +67,6 @@ public class GRTraits extends ScriptableSystem {
         return 0.0;
     }
 
-    // Multiplica solo el dano de un tipo (fuego, electrico, quimico) si el golpe lo lleva.
     private func ScaleType(nemesisId: Int32, hitEvent: ref<gameHitEvent>, trait: String, mult: Float, type: gamedataDamageType) {
         if this.Has(nemesisId, trait) && GRTraits.DamageOf(hitEvent, type) > 0.0 {
             hitEvent.attackComputed.MultAttackValue(mult, type);
@@ -87,7 +75,6 @@ public class GRTraits extends ScriptableSystem {
         }
     }
 
-    // Multiplica todo el dano del golpe.
     private func ScaleAll(nemesisId: Int32, hitEvent: ref<gameHitEvent>, trait: String, mult: Float) {
         if this.Has(nemesisId, trait) {
             hitEvent.attackComputed.MultAttackValue(mult);
@@ -96,7 +83,6 @@ public class GRTraits extends ScriptableSystem {
         }
     }
 
-    // V golpea a un Nemesis.
     private func ApplyDefense(nemesisId: Int32, hitEvent: ref<gameHitEvent>) {
         this.ScaleType(nemesisId, hitEvent, "fireproof", 0.25, gamedataDamageType.Thermal);
         this.ScaleType(nemesisId, hitEvent, "fear_fire", 2.0, gamedataDamageType.Thermal);
@@ -145,7 +131,7 @@ public class GRTraits extends ScriptableSystem {
             let targetId: Int32 = spawner.GetNemesisId(hitEvent.target.GetEntityID());
             if targetId > 0 {
                 traits.ApplyDefense(targetId, hitEvent);
-                // Fase 7: un remate (cabeza o explosion) impide que vuelva.
+
                 let attack: ref<AttackData> = hitEvent.attackData;
                 spawner.RecordPlayerHit(targetId, attack.HasFlag(hitFlag.Headshot) || AttackData.IsExplosion(attack.GetAttackType()));
             }
@@ -159,7 +145,6 @@ public class GRTraits extends ScriptableSystem {
         }
     }
 
-    // V escanea a un Nemesis: se revelan todos sus rasgos.
     public func OnScanned(npc: ref<ScriptedPuppet>) {
         let spawner: ref<GRSpawner> = GRSpawner.Get(this.GetGameInstance());
         if !IsDefined(spawner) {
@@ -171,9 +156,6 @@ public class GRTraits extends ScriptableSystem {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // API para CET
-    // -------------------------------------------------------------------------
     public func GetRevealCount() -> Int32 {
         return ArraySize(this.m_reveals);
     }
@@ -187,9 +169,6 @@ public class GRTraits extends ScriptableSystem {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Hooks (mismas firmas que ya envuelven Merc Protocol y Black Market Arsenal)
-// -----------------------------------------------------------------------------
 @wrapMethod(DamageSystem)
 private final func CalculateSourceModifiers(hitEvent: ref<gameHitEvent>, cache: ref<CacheData>) -> Void {
     wrappedMethod(hitEvent, cache);

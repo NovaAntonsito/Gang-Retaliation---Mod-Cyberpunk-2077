@@ -1,6 +1,3 @@
-// Gang Retaliation - ajustes (Mod Settings)
-// Si Mod Settings no esta instalado se usan los valores por defecto.
-
 module GangRetaliation
 
 @if(ModuleExists("ModSettingsModule"))
@@ -22,7 +19,6 @@ public func GRRegisterSettingsListener(listener: ref<IScriptable>) {}
 public func GRUnregisterSettingsListener(listener: ref<IScriptable>) {}
 
 public class GRSettings extends ScriptableSystem {
-
     public static func Get(gi: GameInstance) -> ref<GRSettings> {
         return GameInstance.GetScriptableSystemsContainer(gi).Get(n"GangRetaliation.GRSettings") as GRSettings;
     }
@@ -39,9 +35,6 @@ public class GRSettings extends ScriptableSystem {
         GRLog("Ajustes actualizados");
     }
 
-    // -------------------------------------------------------------------------
-    // General
-    // -------------------------------------------------------------------------
     @runtimeProperty("ModSettings.mod", "GR-ModName")
     @runtimeProperty("ModSettings.category", "GR-CatGeneral")
     @runtimeProperty("ModSettings.category.order", "10")
@@ -59,9 +52,6 @@ public class GRSettings extends ScriptableSystem {
     @runtimeProperty("ModSettings.max", "12")
     public let maxPerGang: Int32 = 8;
 
-    // -------------------------------------------------------------------------
-    // Disparadores
-    // -------------------------------------------------------------------------
     @runtimeProperty("ModSettings.mod", "GR-ModName")
     @runtimeProperty("ModSettings.category", "GR-CatTriggers")
     @runtimeProperty("ModSettings.category.order", "20")
@@ -89,9 +79,6 @@ public class GRSettings extends ScriptableSystem {
     @runtimeProperty("ModSettings.max", "60")
     public let fleeHealthPercent: Int32 = 35;
 
-    // -------------------------------------------------------------------------
-    // Emboscadas
-    // -------------------------------------------------------------------------
     @runtimeProperty("ModSettings.mod", "GR-ModName")
     @runtimeProperty("ModSettings.category", "GR-CatAmbush")
     @runtimeProperty("ModSettings.category.order", "30")
@@ -139,9 +126,6 @@ public class GRSettings extends ScriptableSystem {
     @runtimeProperty("ModSettings.max", "180")
     public let ambushSmsSeconds: Int32 = 60;
 
-    // -------------------------------------------------------------------------
-    // Gigs
-    // -------------------------------------------------------------------------
     @runtimeProperty("ModSettings.mod", "GR-ModName")
     @runtimeProperty("ModSettings.category", "GR-CatGig")
     @runtimeProperty("ModSettings.category.order", "40")
@@ -159,9 +143,6 @@ public class GRSettings extends ScriptableSystem {
     @runtimeProperty("ModSettings.max", "100")
     public let gigChancePercent: Int32 = 50;
 
-    // -------------------------------------------------------------------------
-    // Jerarquia
-    // -------------------------------------------------------------------------
     @runtimeProperty("ModSettings.mod", "GR-ModName")
     @runtimeProperty("ModSettings.category", "GR-CatHierarchy")
     @runtimeProperty("ModSettings.category.order", "50")
@@ -192,9 +173,26 @@ public class GRSettings extends ScriptableSystem {
     @runtimeProperty("ModSettings.max", "100")
     public let returnChancePercent: Int32 = 40;
 
-    // -------------------------------------------------------------------------
-    // Debug
-    // -------------------------------------------------------------------------
+    @runtimeProperty("ModSettings.mod", "GR-ModName")
+    @runtimeProperty("ModSettings.category", "GR-CatWar")
+    @runtimeProperty("ModSettings.category.order", "60")
+    @runtimeProperty("ModSettings.displayName", "GR-SetWarChance")
+    @runtimeProperty("ModSettings.description", "GR-SetWarChanceDesc")
+    @runtimeProperty("ModSettings.step", "5")
+    @runtimeProperty("ModSettings.min", "0")
+    @runtimeProperty("ModSettings.max", "100")
+    public let warChancePercent: Int32 = 30;
+
+    @runtimeProperty("ModSettings.mod", "GR-ModName")
+    @runtimeProperty("ModSettings.category", "GR-CatWar")
+    @runtimeProperty("ModSettings.category.order", "60")
+    @runtimeProperty("ModSettings.displayName", "GR-SetSkirmishChance")
+    @runtimeProperty("ModSettings.description", "GR-SetSkirmishChanceDesc")
+    @runtimeProperty("ModSettings.step", "5")
+    @runtimeProperty("ModSettings.min", "0")
+    @runtimeProperty("ModSettings.max", "100")
+    public let skirmishChancePercent: Int32 = 35;
+
     @runtimeProperty("ModSettings.mod", "GR-ModName")
     @runtimeProperty("ModSettings.category", "GR-CatDebug")
     @runtimeProperty("ModSettings.category.order", "90")

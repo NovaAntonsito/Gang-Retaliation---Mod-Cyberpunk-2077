@@ -1,7 +1,3 @@
- -- Gang Retaliation - persistencia en archivo propio (JSON)
--- El archivo sobrevive a recargas de partida. Cada partida guarda un campaignId
--- (redscript, persistent) que indica que bloque del JSON le pertenece.
-
 local Store = {
     path = "data/gang_retaliation.json",
     schema = 1,
@@ -33,7 +29,6 @@ function Store.load()
             end
         end
     else
-        -- No sobrescribir un archivo roto: se guarda una copia antes de empezar de cero.
         print("[GangRetaliation] JSON corrupto, se guarda copia en " .. Store.path .. ".bak")
         local backup = io.open(Store.path .. ".bak", "w")
         if backup then
@@ -66,13 +61,11 @@ end
 
 local EMPTY_CAMPAIGN = { nemeses = {} }
 
--- Solo lectura: no crea el bloque, para no llenar el JSON de campanas vacias.
 function Store.campaign(id)
     if not Store.data then Store.load() end
     return Store.data.campaigns[tostring(id)] or EMPTY_CAMPAIGN
 end
 
--- Devuelve el bloque de la campana, creandolo si no existe.
 function Store.ensureCampaign(id)
     if not Store.data then Store.load() end
     local key = tostring(id)

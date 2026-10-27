@@ -1,36 +1,29 @@
-// Gang Retaliation - fase 2: reaparicion de Nemesis y emboscadas (Codeware DynamicEntitySystem)
-// Patrones de colocacion y hostilidad copiados de Dark Future (DFRandomEncounterSystem).
-// CET decide cuando y quien embosca; aqui se comprueba si es seguro, se genera y se limpia.
-
 module GangRetaliation
 
 public class GRSpawner extends ScriptableSystem {
     private let m_entityIDs: array<EntityID>;
-    // 0 = escolta (pandillero normal), >0 = id del Nemesis.
+
     private let m_nemesisIDs: array<Int32>;
-    // Frase que dice al aparecer ("" = ninguna).
+
     private let m_lines: array<String>;
-    // Nombre del Nemesis ("" = escolta): se usa en las frases y en el escaner.
+
     private let m_speakers: array<String>;
-    // Icono sobre la cabeza del Nemesis.
+
     private let m_mappins: array<NewMappinID>;
     private let m_hasMappin: array<Bool>;
-    // Nemesis muertos pendientes de leer por CET, y como murieron (paralelo):
-    // "confirmed" = remate (cabeza, explosion o desmembrado), "knockout" = inconsciente, "normal" = el resto.
+
     private let m_deaths: array<Int32>;
     private let m_deathKinds: array<String>;
-    // Nemesis cuyo ultimo golpe de V fue de remate (disparo a la cabeza o explosion).
+
     private let m_finisherIds: array<Int32>;
-    // Apariencia real con la que aparece cada Nemesis ("id:apariencia"), para que CET la guarde.
+
     private let m_appearanceReports: array<String>;
 
-    // Emboscada en curso.
     private let m_ambushActive: Bool;
     private let m_ambushStart: Float;
     private let m_ambushSawCombat: Bool;
     private let m_ambushCalmSince: Float;
 
-    // Resultado de FindReachableSpot.
     private let m_spotFound: Bool;
 
     public static func Get(gi: GameInstance) -> ref<GRSpawner> {
@@ -49,12 +42,10 @@ public class GRSpawner extends ScriptableSystem {
         return EngineTime.ToFloat(GameInstance.GetSimTime(this.GetGameInstance()));
     }
 
-    // Dia del calendario del juego, con decimales (la jerarquia cuenta las vacantes en dias).
     public func GetGameDay() -> Float {
         return GameInstance.GetTimeSystem(this.GetGameInstance()).GetGameTimeStamp() / 86400.0;
     }
 
-    // Tiempo de juego en segundos (se para con la pausa). CET lo usa para el aviso por SMS.
     public func GetTime() -> Float {
         return this.Now();
     }
@@ -70,7 +61,6 @@ public class GRSpawner extends ScriptableSystem {
         return -1;
     }
 
-    // 0 si la entidad no es un Nemesis generado por el mod.
     public func GetNemesisId(id: EntityID) -> Int32 {
         let index: Int32 = this.IndexOf(id);
         return index >= 0 ? this.m_nemesisIDs[index] : 0;
@@ -85,21 +75,15 @@ public class GRSpawner extends ScriptableSystem {
         return false;
     }
 
-    // -------------------------------------------------------------------------
-    // Colocacion
-    // -------------------------------------------------------------------------
     private func GetDirection(player: ref<PlayerPuppet>, angle: Float) -> Vector4 {
         return Vector4.RotateAxis(player.GetWorldForward(), Vector4(0.0, 0.0, 1.0, 0.0), angle / 180.0 * Pi());
     }
 
-    // Punto en el suelo navegable a "distance" metros de V, girado "angle" grados desde donde mira.
     private func GetGroundPosition(player: ref<PlayerPuppet>, angle: Float, distance: Float) -> Vector4 {
         let raw: Vector4 = player.GetWorldPosition() + this.GetDirection(player, angle) * distance;
         return GameInstance.GetNavigationSystem(this.GetGameInstance()).GetNearestNavmeshPointBelowOnlyHumanNavmesh(raw, 1.0, 5);
     }
 
-    // Punto desde el que se puede llegar a pie hasta V: suelo navegable, altura parecida
-    // y una ruta sin rodeos enormes (evita muros, azoteas y zonas fuera del mapa).
     private func IsReachable(player: ref<PlayerPuppet>, pos: Vector4, distance: Float) -> Bool {
         let target: Vector4 = player.GetWorldPosition();
         if Vector4.IsZero(pos) || AbsF(pos.Z - target.Z) > 4.0 {
@@ -109,13 +93,11 @@ public class GRSpawner extends ScriptableSystem {
         if !IsDefined(path) || ArraySize(path.path) < 2 {
             return false;
         }
-        // La ruta tiene que acabar junto a V y no ser mucho mas larga que la linea recta.
+
         let last: Vector4 = path.path[ArraySize(path.path) - 1];
         return Vector4.Distance(last, target) < 3.0 && path.CalculateLength() < distance * 2.5 + 10.0;
     }
 
-    // Busca un punto alcanzable cerca del angulo y la distancia pedidos: prueba angulos
-    // cada vez mas abiertos y luego mas cerca de V. Deja m_spotFound en false si no hay ninguno.
     private func FindReachableSpot(player: ref<PlayerPuppet>, angle: Float, distance: Float) -> Vector4 {
         let offsets: array<Float> = [0.0, 25.0, -25.0, 50.0, -50.0, 80.0, -80.0, 120.0, -120.0];
         let scales: array<Float> = [1.0, 0.7, 0.45];
@@ -132,7 +114,15 @@ public class GRSpawner extends ScriptableSystem {
         return player.GetWorldPosition();
     }
 
-    // Orientado hacia V.
+    public func FindWarSpot(angle: Float, distance: Float) -> Vector4 {
+        let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
+        if !IsDefined(player) {
+            return Vector4.EmptyVector();
+        }
+        let pos: Vector4 = this.FindReachableSpot(player, angle, distance);
+        return this.m_spotFound ? pos : Vector4.EmptyVector();
+    }
+
     private func GetFacingPlayer(player: ref<PlayerPuppet>, from: Vector4) -> Quaternion {
         return EulerAngles.ToQuat(Vector4.ToRotation(player.GetWorldPosition() - from));
     }
@@ -165,7 +155,6 @@ public class GRSpawner extends ScriptableSystem {
         return true;
     }
 
-    // Nombre del Nemesis para el escaner ("" si no es un Nemesis del mod).
     public func GetNemesisName(id: EntityID) -> String {
         let index: Int32 = this.IndexOf(id);
         if index < 0 || this.m_nemesisIDs[index] <= 0 {
@@ -191,8 +180,6 @@ public class GRSpawner extends ScriptableSystem {
         }
     }
 
-    // Registra la muerte de un Nemesis (una sola vez). Lo llaman el evento de
-    // DynamicEntitySystem, el hook de muerte de NPC y la limpieza de la emboscada.
     public func MarkDead(id: EntityID) {
         let index: Int32 = this.IndexOf(id);
         if index < 0 {
@@ -205,7 +192,7 @@ public class GRSpawner extends ScriptableSystem {
             ArrayPush(this.m_deaths, nemesisId);
             ArrayPush(this.m_deathKinds, kind);
             ArrayRemove(this.m_finisherIds, nemesisId);
-            // Deja de contar como Nemesis: ni rasgos ni segunda muerte.
+
             this.m_nemesisIDs[index] = 0;
             GRLog("Nemesis #" + IntToString(nemesisId) + " muerto (" + kind + ")");
         }
@@ -227,7 +214,6 @@ public class GRSpawner extends ScriptableSystem {
         return "normal";
     }
 
-    // Golpe de V a un Nemesis (lo llama GRTraits.OnHit): se recuerda si fue de remate.
     public func RecordPlayerHit(nemesisId: Int32, finisher: Bool) {
         if finisher {
             if !ArrayContains(this.m_finisherIds, nemesisId) {
@@ -238,7 +224,6 @@ public class GRSpawner extends ScriptableSystem {
         }
     }
 
-    // Muertos o derribados que el juego no ha notificado.
     private func CheckNeutralized() {
         let i: Int32 = ArraySize(this.m_entityIDs) - 1;
         while i >= 0 {
@@ -252,7 +237,6 @@ public class GRSpawner extends ScriptableSystem {
         }
     }
 
-    // Frases de poca vida (del Nemesis o de V).
     private func CheckTaunts() {
         let taunts: ref<GRTaunts> = GRTaunts.Get(this.GetGameInstance());
         if !IsDefined(taunts) {
@@ -270,7 +254,6 @@ public class GRSpawner extends ScriptableSystem {
         }
     }
 
-    // Debug: genera al Nemesis delante de V.
     public func SpawnNearPlayer(nemesisId: Int32, recordID: String, appearance: String, distance: Float, name: String) -> Bool {
         let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
         if !IsDefined(player) || this.IsNemesisSpawned(nemesisId) {
@@ -287,10 +270,6 @@ public class GRSpawner extends ScriptableSystem {
         return ok;
     }
 
-    // -------------------------------------------------------------------------
-    // Emboscadas
-    // -------------------------------------------------------------------------
-    // Motivo por el que no se puede emboscar ahora ("" = se puede).
     public func GetAmbushBlocker() -> String {
         let blocker: String = this.GetSpawnBlocker();
         if StrLen(blocker) > 0 {
@@ -306,7 +285,6 @@ public class GRSpawner extends ScriptableSystem {
         return "";
     }
 
-    // Lo que impide generar a cualquier grupo (emboscada o refuerzo).
     private func GetSpawnBlocker() -> String {
         let gi: GameInstance = this.GetGameInstance();
         let player: ref<PlayerPuppet> = GetPlayer(gi);
@@ -325,7 +303,6 @@ public class GRSpawner extends ScriptableSystem {
         return "";
     }
 
-    // Refuerzo en un gig: solo en pleno combate.
     public func GetReinforcementBlocker() -> String {
         let blocker: String = this.GetSpawnBlocker();
         if StrLen(blocker) > 0 {
@@ -337,7 +314,6 @@ public class GRSpawner extends ScriptableSystem {
         return "";
     }
 
-    // Id del gig (encargo de fixer) que V lleva seguido, o "" si lo seguido no es un gig.
     public func GetActiveGigId() -> String {
         let quest: wref<JournalQuest> = this.GetTrackedQuest();
         if !IsDefined(quest) || NotEquals(quest.GetType(), gameJournalQuestType.Contract) {
@@ -354,7 +330,6 @@ public class GRSpawner extends ScriptableSystem {
         return quest.GetTitle(GameInstance.GetJournalManager(this.GetGameInstance()));
     }
 
-    // Lo seguido es un objetivo: se sube por fase hasta la mision.
     private func GetTrackedQuest() -> wref<JournalQuest> {
         let journal: ref<JournalManager> = GameInstance.GetJournalManager(this.GetGameInstance());
         let entry: wref<JournalEntry> = journal.GetTrackedEntry();
@@ -370,7 +345,6 @@ public class GRSpawner extends ScriptableSystem {
         return null;
     }
 
-    // Bandas que controlan el distrito actual, separadas por comas (p. ej. "TygerClaws,Scavengers").
     public func GetDistrictGangs() -> String {
         let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
         if !IsDefined(player) {
@@ -378,7 +352,7 @@ public class GRSpawner extends ScriptableSystem {
         }
         let district: wref<District_Record> = player.GetPreventionSystem().GetCurrentDistrict().GetDistrictRecord();
         let result: String = "";
-        // Si el distrito no tiene bandas, se sube al distrito padre (igual que Dark Future).
+
         while IsDefined(district) && StrLen(result) == 0 {
             if district.GetGangsCount() > 0 {
                 let gangs: array<wref<Affiliation_Record>>;
@@ -401,8 +375,6 @@ public class GRSpawner extends ScriptableSystem {
         return IsDefined(district) ? district.EnumName() : "";
     }
 
-    // Genera al Nemesis a la espalda de V y a sus escoltas alrededor.
-    // escortRecords: recordIDs separados por comas (uno por escolta).
     public func StartAmbush(nemesisId: Int32, recordID: String, appearance: String, escortRecords: String, line: String, speaker: String) -> Bool {
         if StrLen(this.GetAmbushBlocker()) > 0 || this.IsNemesisSpawned(nemesisId) {
             return false;
@@ -415,7 +387,6 @@ public class GRSpawner extends ScriptableSystem {
         return true;
     }
 
-    // Gig: el Nemesis llega como refuerzo en mitad del combate. Se limpia igual que una emboscada.
     public func StartReinforcement(nemesisId: Int32, recordID: String, appearance: String, escortRecords: String, line: String, speaker: String) -> Bool {
         if StrLen(this.GetReinforcementBlocker()) > 0 || this.IsNemesisSpawned(nemesisId) {
             return false;
@@ -431,7 +402,6 @@ public class GRSpawner extends ScriptableSystem {
     private func SpawnGroup(nemesisId: Int32, recordID: String, appearance: String, escortRecords: String, line: String, speaker: String, distance: Float) -> Bool {
         let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
 
-        // Nemesis detras de V (entre 150 y 210 grados), en un punto desde el que pueda llegar a V.
         let angle: Float = RandRangeF(150.0, 210.0);
         let pos: Vector4 = this.FindReachableSpot(player, angle, distance);
         if !this.m_spotFound {
@@ -441,7 +411,7 @@ public class GRSpawner extends ScriptableSystem {
         if !this.SpawnAt(nemesisId, recordID, appearance, pos, this.GetFacingPlayer(player, pos), line, speaker) {
             return false;
         }
-        // Escoltas repartidos a los lados del Nemesis, con apariencia aleatoria.
+
         let escorts: array<String>;
         if StrLen(escortRecords) > 0 {
             escorts = StrSplit(escortRecords, ",");
@@ -467,7 +437,6 @@ public class GRSpawner extends ScriptableSystem {
         return this.m_ambushActive;
     }
 
-    // Lo llama CET cada segundo: limpia la emboscada cuando ha terminado.
     public func Tick() {
         this.CheckNeutralized();
         this.CheckTaunts();
@@ -487,7 +456,7 @@ public class GRSpawner extends ScriptableSystem {
         if this.m_ambushCalmSince == 0.0 {
             this.m_ambushCalmSince = now;
         }
-        // Tras el combate: 20 s de calma. Si nunca hubo combate (V no los vio): 3 minutos.
+
         let calm: Float = now - this.m_ambushCalmSince;
         if (this.m_ambushSawCombat && calm > 20.0) || now - this.m_ambushStart > 180.0 {
             GRLog("Fin de emboscada: limpiando");
@@ -558,7 +527,6 @@ public class GRSpawner extends ScriptableSystem {
         }
     }
 
-    // API para CET
     public func GetDeathCount() -> Int32 {
         return ArraySize(this.m_deaths);
     }
@@ -589,9 +557,6 @@ public class GRSpawner extends ScriptableSystem {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Escaner: muestra el nombre del Nemesis en lugar del generico
-// -----------------------------------------------------------------------------
 @wrapMethod(NPCPuppet)
 protected func CompileScannerChunks() -> Bool {
     let result: Bool = wrappedMethod();

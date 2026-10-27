@@ -1,10 +1,10 @@
--- Gang Retaliation - capa CET (persistencia JSON, nombres y ventana de debug)
-
 local Store = require("modules/store")
 local Names = require("modules/names")
 local Ambush = require("modules/ambush")
 local Traits = require("modules/traits")
 local Hierarchy = require("modules/hierarchy")
+local War = require("modules/war")
+local Escorts = require("modules/escorts")
 
 local GR = {
     overlayOpen = false,
@@ -12,20 +12,19 @@ local GR = {
     sessionToken = 0,
     saveTimer = 0,
     lastAction = "",
-    -- Avisos en cola: el juego solo muestra uno a la vez.
+
     messages = {},
     messageTimer = 0,
-    -- Emboscada anunciada por SMS: { id, due, giveUp } en tiempo de juego (segundos).
+
     pendingAmbush = nil,
-    -- Gigs ya tirados en esta sesion ("gigId/banda" -> true): una tirada por gig y banda.
+
     gigRolled = {},
-    -- Nemesis de la emboscada o gig en curso: si sigue vivo al acabar, gana renombre.
+
     encounterId = nil,
-    -- Debug: dias de juego extra para probar la jerarquia sin esperar.
+
     dayOffset = 0,
 }
 
--- Sistemas de redscript (nil si el juego aun no ha cargado una partida).
 local function getSystem(name)
     local container = Game.GetScriptableSystemsContainer()
     if not container then return nil end
@@ -65,7 +64,6 @@ local function notify(msg)
     print("[GangRetaliation] " .. msg)
 end
 
--- Muestra el siguiente aviso de la cola cada 3,5 s.
 local function flushMessages(delta)
     GR.messageTimer = GR.messageTimer - delta
     if GR.messageTimer > 0 or #GR.messages == 0 then return end
@@ -101,26 +99,22 @@ local function labelOf(n)
     return Names.display(n, lang()) .. " (" .. Names.gangLabel(n.gang) .. ")"
 end
 
--- Nombre con rango para el escaner y las frases: Teniente Kenji Mori "el Rencoroso".
 local function fullName(n)
     if (n.rank or 1) <= 1 then return Names.display(n, lang()) end
     return rankLabel(n.rank, n.gender) .. " " .. Names.display(n, lang())
 end
 
--- Dia de juego (con decimales) + el adelanto de debug.
 local function gameDay()
     local spawner = getSystem("GangRetaliation.GRSpawner")
     return (spawner and spawner:GetGameDay() or 0) + GR.dayOffset
 end
 
--- Pasa los rasgos a redscript antes de generar al Nemesis.
 local function pushTraits(n)
     if Traits.ensure(n) then Store.dirty = true end
     local sys = getSystem("GangRetaliation.GRTraits")
     if sys then sys:SetTraits(n.id, Traits.csv(n)) end
 end
 
--- Un Nemesis que ya existia vuelve a escapar.
 local function updateNemesis(evt)
     local n = findNemesis(evt.nemesisId)
     if not n then return end
@@ -137,7 +131,6 @@ local function updateNemesis(evt)
     Store.save()
 end
 
--- Convierte un evento de redscript en un Nemesis guardado.
 local function createNemesis(evt)
     if evt.nemesisId and evt.nemesisId > 0 then
         updateNemesis(evt)
@@ -202,7 +195,6 @@ local function processPending()
     det:ClearPending()
 end
 
--- Nemesis generados por el mod que han muerto.
 local function processDeaths()
     local spawner = getSpawner()
     if not spawner then return end
@@ -215,8 +207,9 @@ local function processDeaths()
             local kind = spawner:GetDeathKind(i)
             n.status = "dead"
             n.diedAt = os.time()
+            n.deathDay = gameDay()
             Store.dirty = true
-            -- Fase 7: si no fue un remate, puede volver reconstruido (no se le dice al jugador).
+
             local settings = getSettings()
             local returns = Hierarchy.resolveDeath(n, kind, {
                 day = gameDay(), random = math.random,
@@ -238,7 +231,6 @@ local function processDeaths()
     Store.save()
 end
 
--- Genera la emboscada ya. Devuelve un texto con el resultado para la ventana de debug.
 local function launchAmbush(n)
     local settings = getSettings()
     local spawner = getSpawner()
@@ -259,9 +251,6 @@ local function launchAmbush(n)
     return "ambush #" .. n.id
 end
 
--- Intenta lanzar una emboscada. force = ignorar espera y probabilidad (debug).
--- warnSeconds = segundos entre el SMS y el ataque (nil = el ajuste; 0 = sin SMS).
--- Devuelve un texto con el resultado para la ventana de debug.
 local function tryAmbush(force, warnSeconds)
     local settings = getSettings()
     local spawner = getSpawner()
@@ -279,7 +268,9 @@ local function tryAmbush(force, warnSeconds)
     local blocker = spawner:GetAmbushBlocker()
     if blocker ~= "" then return "blocked: " .. blocker end
 
-    local districtGangs = Ambush.parseGangs(spawner:GetDistrictGangs())
+    local warSys = getSystem("GangRetaliation.GRWar")
+    local districtGangs = (warSys and War.districtGangs(campaign, warSys:GetCurrentDistrict()))
+        or Ambush.parseGangs(spawner:GetDistrictGangs())
     local n = Ambush.pick(campaign.nemeses, districtGangs, not force)
     if not n then return "no living Nemesis" end
 
@@ -292,12 +283,11 @@ local function tryAmbush(force, warnSeconds)
         return launchAmbush(n)
     end
     local now = spawner:GetTime()
-    -- Si a la hora no se puede (combate, coche...), espera hasta 5 min mas y luego desiste.
+
     GR.pendingAmbush = { id = n.id, due = now + delay, giveUp = now + delay + 300 }
     return "sms #" .. n.id .. ", ambush in " .. delay .. " s"
 end
 
--- Lanza la emboscada anunciada cuando pasa el tiempo del SMS.
 local function updatePendingAmbush()
     local pending = GR.pendingAmbush
     local spawner = getSpawner()
@@ -312,7 +302,7 @@ local function updatePendingAmbush()
         return
     end
     local blocker = spawner:GetAmbushBlocker()
-    -- "spawn failed" = no hay sitio alcanzable cerca de V: se reintenta como si estuviera bloqueada.
+
     local result = blocker == "" and launchAmbush(n) or ("blocked: " .. blocker)
     if result ~= "spawn failed" and blocker == "" then
         GR.pendingAmbush = nil
@@ -323,8 +313,6 @@ local function updatePendingAmbush()
     end
 end
 
--- Gig: si V pelea contra la banda de un Nemesis vivo, este puede llegar como refuerzo.
--- force = sin gig ni tirada (debug). Devuelve un texto con el resultado, o nil si no hay nada que contar.
 local function tryGig(force)
     local settings = getSettings()
     local spawner = getSpawner()
@@ -364,7 +352,6 @@ local function tryGig(force)
     return force and "no Nemesis for this fight" or nil
 end
 
--- Los Nemesis sin apariencia fija (reclutados) se quedan con la cara con la que aparecen.
 local function processAppearances()
     local spawner = getSpawner()
     if not spawner or spawner:GetAppearanceReportCount() == 0 then return end
@@ -379,7 +366,6 @@ local function processAppearances()
     spawner:ClearAppearanceReports()
 end
 
--- Sobrevivir a una emboscada o gig (V no lo mato) da renombre.
 local function checkEncounter()
     local spawner = getSpawner()
     if not GR.encounterId or not spawner or spawner:IsAmbushActive() then return end
@@ -393,7 +379,6 @@ local function checkEncounter()
     end
 end
 
--- Avisos de la jerarquia (ascensos, reclutas y rumores de luchas internas).
 local function hierarchyEvent(kind, a, b)
     local gang = Names.gangLabel(a.gang)
     local nameA = Names.display(a, lang())
@@ -416,13 +401,97 @@ local function hierarchyEvent(kind, a, b)
     elseif kind == "feudFail" then
         notify(string.format(text("GR-MsgFeudFail", "Rumor: %s put %s in their place."), nameA, nameB))
     elseif kind == "feudFailDead" then
-        -- a = el superior que gana, b = el retador que muere.
         notify(string.format(text("GR-MsgFeudFailDead", "Rumor: %s challenged %s and paid with their life."), nameB, nameA))
     end
     Store.dirty = true
 end
 
--- Paso de la jerarquia. feudChance = forzar la probabilidad de lucha interna (debug).
+local function districtLabel(campaign, key)
+    local d = campaign.war and campaign.war.districts[key]
+    return d and d.label or key
+end
+
+local function warLine(kind, a, d, place)
+    if kind == "warStart" then
+        return string.format(text("GR-MsgWarStart", "Rumor: the %s are attacking the %s in %s."), Names.gangLabel(a), Names.gangLabel(d), place)
+    elseif kind == "warWon" then
+        return string.format(text("GR-MsgWarWon", "The %s took %s from the %s."), Names.gangLabel(a), place, Names.gangLabel(d))
+    end
+    return string.format(text("GR-MsgWarHeld", "The %s held %s against the %s."), Names.gangLabel(a), place, Names.gangLabel(d))
+end
+
+local function warEvent(kind, a, d, key)
+    notify(warLine(kind, a, d, districtLabel(Store.campaign(GR.campaignId), key)))
+    Store.dirty = true
+end
+
+local function warContext(campaign, settings)
+    return {
+        day = gameDay(),
+        random = math.random,
+        settings = { warChancePercent = settings.warChancePercent },
+        gangs = Hierarchy.knownGangs(campaign),
+        event = warEvent,
+    }
+end
+
+local function updateWar(campaign, settings)
+    local warSys = getSystem("GangRetaliation.GRWar")
+    if not warSys then return end
+    if GR.warInit ~= GR.campaignId then
+        local list = warSys:GetAllDistricts()
+        War.init(campaign, list, function(gang) return Names.gangLabels[gang] ~= nil end)
+        GR.warInit = GR.campaignId
+        print(string.format('[GangRetaliation] Territorio: %d distritos del juego, %d con bandas del mod',
+            select(2, string.gsub(list, '[^;]+', '')), #((campaign.war or {}).order or {})))
+        Store.dirty = true
+    end
+    War.update(campaign, warContext(campaign, settings))
+end
+
+local function groupRecords(gang, count)
+    local list = Escorts[gang]
+    if not list or #list == 0 then return nil end
+    local ids = {}
+    for i = 1, count do ids[i] = list[math.random(#list)] end
+    return table.concat(ids, ",")
+end
+
+local function trySkirmish(force)
+    local settings = getSettings()
+    local warSys = getSystem("GangRetaliation.GRWar")
+    if not settings or not warSys or not settings.enabled then return "no systems" end
+    if not force and (settings.skirmishChancePercent or 0) <= 0 then return "disabled" end
+    local blocker = warSys:GetBlocker()
+    if blocker ~= "" then return "blocked: " .. blocker end
+    local campaign = Store.campaign(GR.campaignId)
+    local key = warSys:GetCurrentDistrict()
+    local war = War.activeWarAt(campaign, key)
+    local a, d = war and war.a, war and war.d
+    if not war then
+        if not force then return "no war here" end
+
+        local gangs = Hierarchy.knownGangs(campaign)
+        a, d = gangs[1], gangs[2]
+        local district = campaign.war and campaign.war.districts[key]
+        if district then
+            local sorted = {}
+            for gang in pairs(district.inf) do table.insert(sorted, gang) end
+            table.sort(sorted, function(x, y) return district.inf[x] > district.inf[y] end)
+            if sorted[2] then a, d = sorted[1], sorted[2] end
+        end
+    elseif not force then
+        if os.time() - (GR.lastSkirmish or 0) < 300 then return "cooldown" end
+        if math.random(100) > settings.skirmishChancePercent then return "roll failed" end
+    end
+    local ra, rd = groupRecords(a, 3), groupRecords(d, 3)
+    if not ra or not rd then return "no records for " .. tostring(a) .. "/" .. tostring(d) end
+    if not warSys:Start(ra, rd) then return "spawn failed: " .. tostring(warSys:GetLastError()) end
+    GR.lastSkirmish = os.time()
+    notify(string.format(text("GR-MsgSkirmish", "The %s and the %s are shooting it out nearby!"), Names.gangLabel(a), Names.gangLabel(d)))
+    return "skirmish " .. a .. " vs " .. d
+end
+
 local function updateHierarchy(feudChance)
     local settings = getSettings()
     local spawner = getSpawner()
@@ -447,10 +516,9 @@ local function updateHierarchy(feudChance)
         Store.save()
     end
     Hierarchy.update(campaign, ctx)
+    updateWar(campaign, settings)
 end
 
--- Rasgos para el menu, uno por linea: "S|corto|largo" (S = + fortaleza, - debilidad, ? sin descubrir).
--- Los sin descubrir salen como "???" para que escanear siga teniendo sentido.
 local function menuTraits(n)
     local lines = {}
     for _, t in ipairs(n.traits or {}) do
@@ -465,7 +533,6 @@ local function menuTraits(n)
     return table.concat(lines, "\n")
 end
 
--- Cuanto renombre le falta para el ascenso rapido.
 local function renownHint(n)
     local rank = n.rank or 1
     if rank >= Hierarchy.BOSS then
@@ -479,7 +546,6 @@ local function renownHint(n)
     return string.format(text("GR-MenuRenownNeed", "%d more for a fast promotion to %s."), need, nextRank)
 end
 
--- Puesto libre: cuanto falta para que se cubra si nadie llega al renombre del ascenso rapido.
 local function vacancyNote(campaign, gang, rank)
     local state = campaign.hierarchy and campaign.hierarchy[gang]
     local since = state and state.vacant and state.vacant[tostring(rank)]
@@ -490,7 +556,45 @@ local function vacancyNote(campaign, gang, rank)
     return string.format(text("GR-MenuVacantIn", "Filled in %.1f days"), left)
 end
 
--- Datos para la ventana de Nemesis del menu (Menu.reds): textos ya traducidos.
+local function pushTerritory(sys, campaign)
+    local w = campaign.war
+    if not w or not w.order then return end
+    local today = gameDay()
+    for _, key in ipairs(w.order) do
+        local district = w.districts[key]
+        local gangs = {}
+        for gang in pairs(district.inf) do table.insert(gangs, gang) end
+        table.sort(gangs, function(x, y) return district.inf[x] > district.inf[y] end)
+        local parts = {}
+        for _, gang in ipairs(gangs) do
+            table.insert(parts, gang .. "|" .. Names.gangLabel(gang) .. "|" .. tostring(district.inf[gang]))
+        end
+        local war = War.activeWarAt(campaign, key)
+        local warText = ""
+        if war then
+            warText = table.concat({ war.a, war.d, War.strength(campaign, war.a, today), War.strength(campaign, war.d, today),
+                math.floor(today) - war.start + 1, war.finish - war.start + 1 }, "|")
+        end
+        sys:AddDistrict(key, district.label or key, district.region or "", War.owner(district), table.concat(parts, ","), warText)
+    end
+    local ranking = {}
+    for _, gang in ipairs(Hierarchy.knownGangs(campaign)) do
+        table.insert(ranking, { gang = gang, value = War.strength(campaign, gang, today) })
+    end
+    table.sort(ranking, function(x, y) return x.value > y.value end)
+    for _, r in ipairs(ranking) do
+        local losses = War.recentLosses(campaign, r.gang, today)
+        local note = ""
+        if losses > 0 then
+            note = string.format(text("GR-MenuWeakNote", "-%d: V killed %d Nemeses"), losses * War.weakPenalty, losses)
+        end
+        sys:AddGangStrength(r.gang, Names.gangLabel(r.gang), r.value, note)
+    end
+    for _, m in ipairs(w.rumors or {}) do
+        sys:AddRumor(string.format(text("GR-MenuDay", "DAY %d"), m.day), warLine(m.kind, m.a, m.d, districtLabel(campaign, m.district)))
+    end
+end
+
 local function pushMenu()
     local sys = getSystem("GangRetaliation.GRMenuData")
     if not sys then return end
@@ -513,8 +617,9 @@ local function pushMenu()
             cause = n.diedBy == "feud" and text("GR-MenuDiedFeud", "Killed by their own gang") or text("GR-MenuDiedV", "Killed by V")
         end
         local title = (l == "es") and n.titleEs or n.titleEn
-        -- La primera huida no suma a n.escapes (crea al Nemesis).
+
         local escapes = (n.escapes or 0) + ((n.origin == "escaped" or n.origin == "fled") and 1 or 0)
+        -- Maximo 8 argumentos por llamada a redscript: con mas, el juego crashea al cargar.
         sys:Add(n.gang, Names.gangLabel(n.gang), n.rank or 1, n.status == "dead", n.name or "?", title or "",
             Ambush.hasMetV(n), n.renown or 0)
         sys:AddDetail(menuTraits(n), renownHint(n), text("GR-Origin-" .. (n.origin or "escaped"), n.origin or ""), cause)
@@ -523,9 +628,9 @@ local function pushMenu()
     for _, gang in ipairs(Hierarchy.knownGangs(campaign)) do
         sys:SetVacancy(gang, vacancyNote(campaign, gang, 3), vacancyNote(campaign, gang, 2))
     end
+    pushTerritory(sys, campaign)
 end
 
--- Rasgos descubiertos en combate o al escanear.
 local function processReveals()
     local sys = getSystem("GangRetaliation.GRTraits")
     if not sys then return end
@@ -554,7 +659,6 @@ local function processReveals()
     sys:ClearReveals()
 end
 
--- Detecta cambios de partida: cada save tiene su campaignId.
 local function refreshCampaign()
     if not Game.GetPlayer() then
         GR.campaignId = 0
@@ -562,7 +666,7 @@ local function refreshCampaign()
     end
     local sys = getSystem("GangRetaliation.GRSystem")
     if not sys then return end
-    -- En el menu principal no hay campana: un id de ahi se colaba en el JSON como campana basura.
+
     if not sys:IsInGame() then
         GR.campaignId = 0
         return
@@ -581,9 +685,10 @@ local function refreshCampaign()
         GR.gigRolled = {}
         GR.encounterId = nil
         debugLog("Campana activa: " .. tostring(id))
-        -- Durante la pantalla de carga el juego aun no esta listo: esperar antes de tocar nada.
+
+        -- En la pantalla de carga el juego aun no esta listo: no tocar nada hasta que pase.
         GR.warmup = 15
-        -- La jerarquia (y las cupulas de una campana nueva) en cuanto acaba la espera.
+
         GR.hierarchyNow = true
     end
 end
@@ -612,7 +717,6 @@ registerForEvent("onUpdate", function(delta)
         if not ok then print("[GangRetaliation] Error en jerarquia: " .. tostring(err)) end
     end
 
-    -- Una vez por segundo: comprobar si los que huyen han escapado.
     GR.fleeTimer = (GR.fleeTimer or 0) + delta
     if GR.fleeTimer >= 1 then
         GR.fleeTimer = 0
@@ -622,6 +726,8 @@ registerForEvent("onUpdate", function(delta)
         if speech then speech:Tick() end
         local spawner = getSpawner()
         if spawner then spawner:Tick() end
+        local warSys = getSystem("GangRetaliation.GRWar")
+        if warSys then warSys:Tick() end
         pcall(updatePendingAmbush)
         GR.menuTimer = (GR.menuTimer or 0) + 1
         if GR.menuTimer >= 2 then
@@ -633,7 +739,6 @@ registerForEvent("onUpdate", function(delta)
         if result then debugLog("Gig: " .. tostring(result)) end
     end
 
-    -- Una vez por minuto: tirada de emboscada.
     GR.ambushTimer = (GR.ambushTimer or 0) + delta
     if GR.ambushTimer >= 60 then
         GR.ambushTimer = 0
@@ -641,6 +746,8 @@ registerForEvent("onUpdate", function(delta)
         debugLog("Emboscada: " .. tostring(result))
         local okH, errH = pcall(updateHierarchy)
         if not okH then print("[GangRetaliation] Error en jerarquia: " .. tostring(errH)) end
+        local okS, resultS = pcall(trySkirmish, false)
+        debugLog("Escaramuza: " .. tostring(resultS))
     end
 
     processPending()
@@ -650,7 +757,6 @@ registerForEvent("onUpdate", function(delta)
     processReveals()
     flushMessages(delta)
 
-    -- Guardado agrupado: como mucho una escritura cada 5 s.
     if Store.dirty then
         GR.saveTimer = GR.saveTimer + delta
         if GR.saveTimer >= 5 then
@@ -666,7 +772,7 @@ registerForEvent("onOverlayClose", function() GR.overlayOpen = false end)
 registerForEvent("onDraw", function()
     if not GR.overlayOpen then return end
 
-    if ImGui.Begin("Gang Retaliation (dev)") then
+    if ImGui.Begin("Gang Retaliation") then
         if GR.campaignId == 0 then
             ImGui.Text(text("GR-UiWaiting", "Waiting for a loaded save..."))
         else
@@ -728,7 +834,7 @@ registerForEvent("onDraw", function()
                             Store.save()
                         end
                         ImGui.SameLine()
-                        -- Fase 7: muere y vuelve en cuanto pase la jerarquia (usar "+1 game day").
+
                         if ImGui.SmallButton("Debug: dies, returns##ret" .. tostring(n.id)) then
                             n.status = "dead"
                             n.diedAt = os.time()
@@ -799,6 +905,20 @@ registerForEvent("onDraw", function()
                 for _, state in pairs(Store.ensureCampaign(GR.campaignId).hierarchy or {}) do state.lastFeudDay = nil end
                 local ok, err = pcall(updateHierarchy, 100)
                 GR.lastAction = ok and "feud" or tostring(err)
+            end
+            if ImGui.Button("Debug: start war") then
+                local settings = getSettings()
+                local campaign = Store.ensureCampaign(GR.campaignId)
+                local ok, res = pcall(function()
+                    updateWar(campaign, settings)
+                    return War.forceWar(campaign, warContext(campaign, settings))
+                end)
+                GR.lastAction = ok and (res and "war started" or "no war possible") or tostring(res)
+            end
+            ImGui.SameLine()
+            if ImGui.Button("Debug: skirmish now") then
+                local ok, res = pcall(trySkirmish, true)
+                GR.lastAction = tostring(res)
             end
             if ImGui.Button("Save now") then Store.save() end
             ImGui.SameLine()

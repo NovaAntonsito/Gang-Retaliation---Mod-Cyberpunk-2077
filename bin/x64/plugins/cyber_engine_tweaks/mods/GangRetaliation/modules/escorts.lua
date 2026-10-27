@@ -1,7 +1,3 @@
--- Gang Retaliation - pandilleros genericos por banda para los escoltas de las emboscadas.
--- Listas tomadas de Dark Future (DFRandomEncounterSystem, por MxOrcBoxer). Voodoo Boys no tiene lista:
--- en ese caso se usa el mismo tipo de NPC que el Nemesis.
-
 return {
     Animals = {
         "Character.animals_bouncer1_melee1_baton_mb",

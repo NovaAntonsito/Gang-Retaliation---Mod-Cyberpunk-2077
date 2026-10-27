@@ -1,6 +1,3 @@
-// Gang Retaliation - textos ES/EN (Codeware)
-// Todas las claves usan el prefijo "GR-".
-
 module GangRetaliation.Localization
 
 import Codeware.Localization.*
@@ -51,6 +48,39 @@ public class GREnglish extends ModLocalizationPackage {
         this.Text("GR-MsgGangFull", "%s already has its maximum of Nemeses.");
         this.Text("GR-MsgAgainEscaped", "%s escaped you again. They are getting stronger.");
         this.Text("GR-MsgNemesisDead", "%s is dead... for now.");
+        this.Text("GR-CatWar", "Gang wars");
+        this.Text("GR-SetWarChance", "New war (% per day)");
+        this.Text("GR-SetWarChanceDesc", "Chance per in-game day that a gang attacks a district held by another. The stronger gang tends to win; gangs whose Nemeses you kill get weaker.");
+        this.Text("GR-SetSkirmishChance", "Street shootouts (% per minute)");
+        this.Text("GR-SetSkirmishChanceDesc", "In a district at war, chance per minute that two groups of the warring gangs shoot it out near you. 0 turns them off.");
+        this.Text("GR-MsgWarStart", "Rumor: the %s are attacking the %s in %s.");
+        this.Text("GR-MsgWarWon", "The %s took %s from the %s.");
+        this.Text("GR-MsgWarHeld", "The %s held %s against the %s.");
+        this.Text("GR-MsgSkirmish", "The %s and the %s are shooting it out nearby!");
+        this.Text("GR-MenuViewGangs", "Gangs");
+        this.Text("GR-MenuViewTerritory", "Territory");
+        this.Text("GR-MenuWars", "ACTIVE WARS");
+        this.Text("GR-MenuDistricts", "DISTRICTS");
+        this.Text("GR-MenuDistrict", "District");
+        this.Text("GR-MenuControls", "Controlled by");
+        this.Text("GR-MenuInfluence", "Influence");
+        this.Text("GR-MenuAtWar", "AT WAR");
+        this.Text("GR-MenuAttacks", "ATTACKS");
+        this.Text("GR-MenuDefends", "DEFENDS");
+        this.Text("GR-MenuStrength", "Strength");
+        this.Text("GR-MenuWarDay", "DAY %d OF %d");
+        this.Text("GR-MenuWarGaining", "%s gains ground every day.");
+        this.Text("GR-MenuWarHolding", "%s is holding on.");
+        this.Text("GR-MenuWarSkirmish", "If you go into the district, the two gangs may be shooting it out near you.");
+        this.Text("GR-MenuNoWar", "No war. The gangs here get along, for now.");
+        this.Text("GR-MenuGangStrength", "Gang strength");
+        this.Text("GR-MenuWeakened", "WEAKENED");
+        this.Text("GR-MenuWeakNote", "-%d: V killed %d Nemeses");
+        this.Text("GR-MenuRumors", "Recent rumors");
+        this.Text("GR-MenuNoRumors", "Nothing new on the streets yet.");
+        this.Text("GR-MenuDay", "DAY %d");
+        this.Text("GR-MenuNoTerritory", "The territory map appears a few seconds after loading a save.");
+        this.Text("GR-MenuHintView", "CHANGE VIEW");
         this.Text("GR-SetReturnChance", "Return from the dead (%)");
         this.Text("GR-SetReturnChanceDesc", "Chance that a dead Nemesis comes back rebuilt with chrome. Headshots, explosions and dismemberment kill them for good; knocked-out ones always come back.");
         this.Text("GR-MsgNemesisConfirmed", "%s is dead. For good this time.");
@@ -287,6 +317,39 @@ public class GRSpanish extends ModLocalizationPackage {
         this.Text("GR-MsgGangFull", "%s ya tiene el máximo de Némesis.");
         this.Text("GR-MsgAgainEscaped", "%s se te ha vuelto a escapar. Cada vez es más fuerte.");
         this.Text("GR-MsgNemesisDead", "%s ha muerto... por ahora.");
+        this.Text("GR-CatWar", "Guerras de bandas");
+        this.Text("GR-SetWarChance", "Guerra nueva (% por día)");
+        this.Text("GR-SetWarChanceDesc", "Probabilidad por día de juego de que una banda ataque un distrito de otra. Suele ganar la más fuerte; las bandas a las que les matas Némesis se debilitan.");
+        this.Text("GR-SetSkirmishChance", "Tiroteos en la calle (% por minuto)");
+        this.Text("GR-SetSkirmishChanceDesc", "En un distrito en guerra, probabilidad por minuto de que dos grupos de las bandas enfrentadas se tiroteen cerca de ti. 0 los desactiva.");
+        this.Text("GR-MsgWarStart", "Rumor: los %s atacan a los %s en %s.");
+        this.Text("GR-MsgWarWon", "Los %s le quitaron %s a los %s.");
+        this.Text("GR-MsgWarHeld", "Los %s resistieron en %s contra los %s.");
+        this.Text("GR-MsgSkirmish", "¡Los %s y los %s se están tiroteando cerca!");
+        this.Text("GR-MenuViewGangs", "Bandas");
+        this.Text("GR-MenuViewTerritory", "Territorio");
+        this.Text("GR-MenuWars", "GUERRAS ACTIVAS");
+        this.Text("GR-MenuDistricts", "DISTRITOS");
+        this.Text("GR-MenuDistrict", "Distrito");
+        this.Text("GR-MenuControls", "Controla");
+        this.Text("GR-MenuInfluence", "Influencia");
+        this.Text("GR-MenuAtWar", "EN GUERRA");
+        this.Text("GR-MenuAttacks", "ATACA");
+        this.Text("GR-MenuDefends", "DEFIENDE");
+        this.Text("GR-MenuStrength", "Fuerza");
+        this.Text("GR-MenuWarDay", "DÍA %d DE %d");
+        this.Text("GR-MenuWarGaining", "%s gana terreno cada día.");
+        this.Text("GR-MenuWarHolding", "%s resiste.");
+        this.Text("GR-MenuWarSkirmish", "Si entras al distrito, puede haber tiroteos entre las dos bandas cerca de ti.");
+        this.Text("GR-MenuNoWar", "Sin guerra. Las bandas presentes conviven por ahora.");
+        this.Text("GR-MenuGangStrength", "Fuerza de las bandas");
+        this.Text("GR-MenuWeakened", "DEBILITADA");
+        this.Text("GR-MenuWeakNote", "-%d: V mató %d Némesis");
+        this.Text("GR-MenuRumors", "Rumores recientes");
+        this.Text("GR-MenuNoRumors", "Todavía no hay novedades en la calle.");
+        this.Text("GR-MenuDay", "DÍA %d");
+        this.Text("GR-MenuNoTerritory", "El mapa de territorio aparece unos segundos después de cargar la partida.");
+        this.Text("GR-MenuHintView", "CAMBIAR VISTA");
         this.Text("GR-SetReturnChance", "Volver de la muerte (%)");
         this.Text("GR-SetReturnChanceDesc", "Probabilidad de que un Némesis muerto vuelva reconstruido con cyberware. Los disparos a la cabeza, las explosiones y el desmembramiento lo matan para siempre; si lo dejas inconsciente, vuelve siempre.");
         this.Text("GR-MsgNemesisConfirmed", "%s ha muerto. Esta vez de verdad.");

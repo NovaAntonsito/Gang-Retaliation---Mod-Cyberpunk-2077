@@ -1,12 +1,8 @@
--- Gang Retaliation - rasgos de los Nemesis (eleccion y guardado; redscript los aplica)
--- n.traits = { { key = "fireproof", revealed = false }, ... }
-
 local Traits = {}
 
 Traits.strengths = { "fireproof", "insulated", "toxproof", "brawler", "blastproof", "firewall", "hardhead", "tough", "deadly" }
 Traits.weaknesses = { "fear_fire", "weak_shock", "weak_tox", "weak_melee", "weak_blast", "weak_hack", "glass_jaw" }
 
--- Una fortaleza y una debilidad del mismo grupo se contradicen.
 local group = {
     fireproof = "fire", fear_fire = "fire",
     insulated = "shock", weak_shock = "shock",
@@ -40,7 +36,6 @@ local function conflicts(n, key)
     return false
 end
 
--- Anade un rasgo al azar de la lista que no tenga ni contradiga. Devuelve la clave o nil.
 function Traits.add(n, list)
     local options = {}
     for _, key in ipairs(list) do
@@ -53,7 +48,6 @@ function Traits.add(n, list)
     return key
 end
 
--- Anade un rasgo concreto si no lo tiene ni lo contradice. Devuelve true si lo anade.
 function Traits.addKey(n, key)
     if Traits.has(n, key) or conflicts(n, key) then return false end
     n.traits = n.traits or {}
@@ -69,8 +63,6 @@ function Traits.countStrengths(n)
     return count
 end
 
--- Garantiza los rasgos minimos: 1 debilidad y 1 fortaleza por cada huida (max 3).
--- Tambien sirve para Nemesis creados antes de esta fase.
 function Traits.ensure(n)
     if type(n.traits) ~= "table" then n.traits = {} end
     local changed = false
@@ -88,7 +80,6 @@ function Traits.ensure(n)
     return changed
 end
 
--- Al volver a escapar gana una fortaleza (max 3; al ascender, max 4). Devuelve la clave nueva o nil.
 function Traits.grow(n, max)
     if Traits.countStrengths(n) >= (max or 3) then return nil end
     return Traits.add(n, Traits.strengths)
@@ -100,7 +91,6 @@ function Traits.csv(n)
     return table.concat(keys, ",")
 end
 
--- Marca un rasgo como descubierto. Devuelve true si no se conocia.
 function Traits.reveal(n, key)
     for _, t in ipairs(n.traits or {}) do
         if t.key == key and not t.revealed then
@@ -122,8 +112,6 @@ function Traits.revealAll(n)
     return any
 end
 
--- Nombres separados por comas. nameOf(key) devuelve el texto localizado.
--- weak = true/false filtra por tipo; onlyRevealed oculta los que no se conocen.
 function Traits.list(n, nameOf, weak, onlyRevealed)
     local names = {}
     for _, t in ipairs(n.traits or {}) do
