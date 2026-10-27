@@ -1,0 +1,395 @@
+// Gang Retaliation - textos ES/EN (Codeware)
+// Todas las claves usan el prefijo "GR-".
+
+module GangRetaliation.Localization
+
+import Codeware.Localization.*
+
+public class GRLocalizationProvider extends ModLocalizationProvider {
+    public func GetPackage(language: CName) -> ref<ModLocalizationPackage> {
+        switch language {
+            case n"en-us": return new GREnglish();
+            case n"es-es": return new GRSpanish();
+            case n"es-mx": return new GRSpanish();
+            default: return null;
+        }
+    }
+
+    public func GetFallback() -> CName {
+        return n"en-us";
+    }
+}
+
+public class GREnglish extends ModLocalizationPackage {
+    protected func DefineTexts() -> Void {
+        this.Text("GR-ModName", "Gang Retaliation");
+        this.Text("GR-CatGeneral", "General");
+        this.Text("GR-CatTriggers", "Nemesis triggers");
+        this.Text("GR-CatDebug", "Debug");
+
+        this.Text("GR-SetEnabled", "Enable mod");
+        this.Text("GR-SetEnabledDesc", "Turns the Nemesis system on or off. Saved data is kept.");
+        this.Text("GR-SetMaxPerGang", "Max Nemeses per gang");
+        this.Text("GR-SetMaxPerGangDesc", "How many named enemies each gang hierarchy can hold.");
+        this.Text("GR-SetEscapeHealth", "Wounded escape threshold (%)");
+        this.Text("GR-SetEscapeHealthDesc", "A gang member who leaves combat at or below this health becomes a Nemesis.");
+        this.Text("GR-SetDebugLog", "Debug log");
+        this.Text("GR-SetDebugLogDesc", "Writes detailed messages to the redscript log and the CET console.");
+
+        this.Text("GR-UiCampaign", "Campaign");
+        this.Text("GR-UiNemeses", "Nemeses");
+        this.Text("GR-UiNoData", "No Nemeses yet.");
+        this.Text("GR-UiWaiting", "Waiting for a loaded save...");
+
+        this.Text("GR-Lang", "en");
+        this.Text("GR-UiCandidates", "Wounded gangers in this fight");
+        this.Text("GR-UiPromoteTarget", "Debug: make target a Nemesis");
+        this.Text("GR-RankSoldier", "Soldier");
+        this.Text("GR-RankLieutenant", "Lieutenant");
+        this.Text("GR-RankBoss", "Boss");
+        this.Text("GR-MsgEscaped", "%s got away wounded. They will remember you.");
+        this.Text("GR-MsgGangFull", "%s already has its maximum of Nemeses.");
+        this.Text("GR-MsgAgainEscaped", "%s escaped you again. They are getting stronger.");
+        this.Text("GR-MsgNemesisDead", "%s is dead... for now.");
+        this.Text("GR-UiSpawn", "Spawn");
+        this.Text("GR-UiDespawnAll", "Despawn all");
+        this.Text("GR-UiDead", "dead");
+
+        this.Text("GR-SetLastManFlees", "Last one standing flees");
+        this.Text("GR-SetLastManFleesDesc", "When only one wounded ganger is left in a fight, they run away shouting. If they get away, they become a Nemesis.");
+        this.Text("GR-SetFleeHealth", "Health to flee (%)");
+        this.Text("GR-SetFleeHealthDesc", "The last ganger standing flees at or below this health.");
+        this.Text("GR-UiFleeTarget", "Debug: make target flee");
+        this.Text("GR-MsgFled", "%s ran away. They will come back for you.");
+
+        this.Text("GR-Gang-Maelstrom", "Maelstrom");
+        this.Text("GR-Gang-TygerClaws", "Tyger Claw");
+        this.Text("GR-Gang-Valentinos", "Valentino");
+        this.Text("GR-Gang-SixthStreet", "6th Street");
+        this.Text("GR-Gang-Animals", "Animal");
+        this.Text("GR-Gang-VoodooBoys", "Voodoo Boy");
+        this.Text("GR-Gang-Wraiths", "Wraith");
+        this.Text("GR-Gang-Scavengers", "Scav");
+        this.Text("GR-Gang-Barghest", "Barghest");
+        this.Text("GR-CatAmbush", "Ambushes");
+        this.Text("GR-SetAmbushEnabled", "Nemesis ambushes");
+        this.Text("GR-SetAmbushEnabledDesc", "Living Nemeses hunt V down and ambush them with a few gangers.");
+        this.Text("GR-SetAmbushCooldown", "Minutes between ambushes");
+        this.Text("GR-SetAmbushCooldownDesc", "Minimum real-time minutes between two ambushes.");
+        this.Text("GR-SetAmbushChance", "Ambush chance per minute (%)");
+        this.Text("GR-SetAmbushChanceDesc", "Once the wait is over, chance checked every minute. Nemeses from the gang that controls the district are much more likely to show up.");
+        this.Text("GR-SetAmbushEscorts", "Max escorts");
+        this.Text("GR-SetAmbushEscortsDesc", "Gangers that come with the Nemesis. Higher ranks bring more.");
+        this.Text("GR-UiForceAmbush", "Debug: ambush now");
+        this.Text("GR-MenuButton", "NEMESES");
+        this.Text("GR-MenuTitle", "Nemeses");
+        this.Text("GR-MenuPrev", "Previous gang");
+        this.Text("GR-MenuNext", "Next gang");
+        this.Text("GR-MenuClose", "Close");
+        this.Text("GR-MenuEmpty", "No Nemeses yet. Let a wounded ganger escape and they will remember you.");
+        this.Text("GR-MenuBoss", "Boss");
+        this.Text("GR-MenuLieutenants", "Lieutenants");
+        this.Text("GR-MenuSoldiers", "Soldiers");
+        this.Text("GR-MenuFallen", "Fallen");
+        this.Text("GR-MenuTraits", "Traits");
+        this.Text("GR-MenuStats", "Encounters %d  |  Renown %d  |  Ambushes %d");
+        this.Text("GR-MenuDiedFeud", "Killed by their own gang");
+        this.Text("GR-MenuDiedV", "Killed by V");
+        this.Text("GR-MenuVacant", "Vacant");
+        this.Text("GR-MenuAlive", "ALIVE");
+        this.Text("GR-MenuFallenShort", "FALLEN");
+        this.Text("GR-RankBossF", "Boss");
+        this.Text("GR-CatHierarchy", "Hierarchy");
+        this.Text("GR-SetVacancyDays", "Days to fill a vacancy");
+        this.Text("GR-SetVacancyDaysDesc", "In-game days before someone takes an empty Lieutenant or Boss spot. Gangers with plenty of renown move up right away.");
+        this.Text("GR-SetFeudChance", "Power struggles (% per day)");
+        this.Text("GR-SetFeudChanceDesc", "Chance per in-game day that someone in a gang challenges their superior. The loser may die.");
+        this.Text("GR-MsgPromoted", "%s rose to %s of the %s.");
+        this.Text("GR-MsgRecruited", "New face in the %s: %s, %s.");
+        this.Text("GR-MsgFeudKill", "Rumor: %s killed %s and is now %s of the %s.");
+        this.Text("GR-MsgFeudDemote", "Rumor: %s overthrew %s and is now %s of the %s.");
+        this.Text("GR-MsgFeudFail", "Rumor: %s put %s in their place.");
+        this.Text("GR-MsgFeudFailDead", "Rumor: %s challenged %s and paid with their life.");
+        this.Text("GR-MsgBossDown", "The %s lost their boss. Someone will want the throne...");
+        this.Text("GR-Taunt-fireproof-1", "Fire? I've been burned worse than this!");
+        this.Text("GR-Taunt-fireproof-2", "Keep the heat coming, it tickles.");
+        this.Text("GR-Taunt-insulated-1", "Shock me all you want, I'm grounded!");
+        this.Text("GR-Taunt-insulated-2", "Nice sparks. Didn't feel a thing.");
+        this.Text("GR-Taunt-toxproof-1", "Poison? I drink worse than that for breakfast.");
+        this.Text("GR-Taunt-toxproof-2", "Your toxins don't work on me!");
+        this.Text("GR-Taunt-brawler-1", "You punch like a corpo!");
+        this.Text("GR-Taunt-brawler-2", "Wanna go hand to hand? Bad idea.");
+        this.Text("GR-Taunt-blastproof-1", "Blew up half my life already. Try harder!");
+        this.Text("GR-Taunt-blastproof-2", "Explosions don't scare me!");
+        this.Text("GR-Taunt-firewall-1", "My ICE eats netrunners like you!");
+        this.Text("GR-Taunt-firewall-2", "Hacking me? Cute.");
+        this.Text("GR-Taunt-hardhead-1", "Skull's reinforced, choom!");
+        this.Text("GR-Taunt-hardhead-2", "Aim for the head all you like!");
+        this.Text("GR-Taunt-tough-1", "That all you got?");
+        this.Text("GR-Taunt-tough-2", "I've taken worse from my own crew!");
+        this.Text("GR-Taunt-deadly-1", "Feel that? There's more coming!");
+        this.Text("GR-Taunt-deadly-2", "Every hit I land is for what you did!");
+        this.Text("GR-Taunt-fear_fire-1", "No, not the fire! Not again!");
+        this.Text("GR-Taunt-fear_fire-2", "Get that fire away from me!");
+        this.Text("GR-Taunt-weak_shock-1", "Agh! My chrome's frying!");
+        this.Text("GR-Taunt-weak_shock-2", "Stop with the shocks, damn it!");
+        this.Text("GR-Taunt-weak_tox-1", "Can't... breathe...");
+        this.Text("GR-Taunt-weak_tox-2", "What did you put in me?!");
+        this.Text("GR-Taunt-weak_melee-1", "Back off! Keep your fists away!");
+        this.Text("GR-Taunt-weak_melee-2", "Not up close, not up close!");
+        this.Text("GR-Taunt-weak_blast-1", "Grenades?! Are you insane?!");
+        this.Text("GR-Taunt-weak_blast-2", "My ears! Damn you!");
+        this.Text("GR-Taunt-weak_hack-1", "Get out of my head!");
+        this.Text("GR-Taunt-weak_hack-2", "My implants! What are you doing to me?!");
+        this.Text("GR-Taunt-glass_jaw-1", "Not the face!");
+        this.Text("GR-Taunt-glass_jaw-2", "Agh, my head!");
+        this.Text("GR-Taunt-Low-1", "This ain't over... not by a long shot!");
+        this.Text("GR-Taunt-Low-2", "You'll pay for this, I swear it!");
+        this.Text("GR-Taunt-Low-3", "I'm not dying here! Not to you!");
+        this.Text("GR-Taunt-PlayerLow-1", "You're bleeding out, V! Just like I did!");
+        this.Text("GR-Taunt-PlayerLow-2", "Look at you, barely standing!");
+        this.Text("GR-Taunt-PlayerLow-3", "Almost done. Hold still!");
+        this.Text("GR-SetAmbushSms", "Warning SMS (seconds before)");
+        this.Text("GR-SetAmbushSmsDesc", "The Nemesis texts V this many seconds before the ambush. 0 = no warning, they attack right away.");
+        this.Text("GR-UiSmsAmbush", "Debug: SMS + ambush in 15 s");
+        this.Text("GR-Sms-1", "I know where you are, V. See you real soon.");
+        this.Text("GR-Sms-2", "Thought you'd seen the last of me? Look behind you in a minute.");
+        this.Text("GR-Sms-3", "Still breathing thanks to you, merc. That was your mistake.");
+        this.Text("GR-Sms-4", "My crew's on the way. Enjoy your last quiet minute.");
+        this.Text("GR-Sms-5", "Been following you for blocks. Time to settle this.");
+        this.Text("GR-Sms-6", "You left me bleeding in the street. Now it's your turn.");
+        this.Text("GR-CatGig", "Gigs");
+        this.Text("GR-SetGigEnabled", "Nemeses in gigs");
+        this.Text("GR-SetGigEnabledDesc", "During a fixer gig, a living Nemesis from the gang V is fighting can show up as reinforcement.");
+        this.Text("GR-SetGigChance", "Chance per gig (%)");
+        this.Text("GR-SetGigChanceDesc", "Checked once per gig, when V starts fighting that gang.");
+        this.Text("GR-MsgGig", "%s heard you were coming and brought backup!");
+        this.Text("GR-Gig-1", "This job's got your name on it, V. So does my gun.");
+        this.Text("GR-Gig-2", "Nobody hits my crew without hearing from me!");
+        this.Text("GR-Gig-3", "Knew the fixer would send you. Been waiting.");
+        this.Text("GR-MsgAmbush", "Ambush! %s found you.");
+        this.Text("GR-Ambush-1", "Remember me, V? 'Cause I remember you.");
+        this.Text("GR-Ambush-2", "Told you I'd come back.");
+        this.Text("GR-Ambush-3", "You left me alive. Big mistake.");
+        this.Text("GR-Ambush-4", "Been hunting you for days, merc.");
+        this.Text("GR-Ambush-5", "No running this time!");
+        this.Text("GR-Ambush-6", "Look who it is. Payback time.");
+        this.Text("GR-MsgTraitStrong", "Strength found - %s: %s");
+        this.Text("GR-MsgTraitWeak", "Weakness found - %s: %s");
+        this.Text("GR-MsgScan", "%s - Strengths: %s. Weaknesses: %s.");
+        this.Text("GR-UiNone", "none");
+        this.Text("GR-UiMarkDead", "Mark dead");
+        this.Text("GR-Trait-fireproof", "Fire resistant");
+        this.Text("GR-Trait-fear_fire", "Weak to fire");
+        this.Text("GR-Trait-insulated", "Shock resistant");
+        this.Text("GR-Trait-weak_shock", "Weak to electricity");
+        this.Text("GR-Trait-toxproof", "Toxin resistant");
+        this.Text("GR-Trait-weak_tox", "Weak to toxins");
+        this.Text("GR-Trait-brawler", "Seasoned brawler (resists melee)");
+        this.Text("GR-Trait-weak_melee", "Weak to melee");
+        this.Text("GR-Trait-blastproof", "Blast resistant");
+        this.Text("GR-Trait-weak_blast", "Weak to explosives");
+        this.Text("GR-Trait-firewall", "Firewall (resists quickhacks)");
+        this.Text("GR-Trait-weak_hack", "Weak to quickhacks");
+        this.Text("GR-Trait-hardhead", "Hard head (resists headshots)");
+        this.Text("GR-Trait-glass_jaw", "Glass jaw (weak to headshots)");
+        this.Text("GR-Trait-tough", "Thick skin (takes less damage)");
+        this.Text("GR-Trait-deadly", "Deadly (hits V harder)");
+
+        this.Text("GR-Flee-1", "This ain't over, choom! I'll be back for you!");
+        this.Text("GR-Flee-2", "Fall back! I'm outta here!");
+        this.Text("GR-Flee-3", "I'll remember your face, merc... I swear it!");
+        this.Text("GR-Flee-4", "We'll meet again, you hear me?!");
+        this.Text("GR-Flee-5", "Enjoy it while it lasts. Next time I won't miss!");
+        this.Text("GR-Flee-6", "My crew's gonna know your name!");
+        this.Text("GR-Flee-7", "You ain't killing me today, gonk!");
+        this.Text("GR-Flee-8", "Spread the word! You're a dead merc walking!");
+    }
+}
+
+public class GRSpanish extends ModLocalizationPackage {
+    protected func DefineTexts() -> Void {
+        this.Text("GR-ModName", "Gang Retaliation");
+        this.Text("GR-CatGeneral", "General");
+        this.Text("GR-CatTriggers", "Creación de Némesis");
+        this.Text("GR-CatDebug", "Depuración");
+
+        this.Text("GR-SetEnabled", "Activar mod");
+        this.Text("GR-SetEnabledDesc", "Activa o desactiva el sistema Némesis. Los datos guardados se conservan.");
+        this.Text("GR-SetMaxPerGang", "Máximo de Némesis por banda");
+        this.Text("GR-SetMaxPerGangDesc", "Cuántos enemigos con nombre puede tener la jerarquía de cada banda.");
+        this.Text("GR-SetEscapeHealth", "Vida para huida herida (%)");
+        this.Text("GR-SetEscapeHealthDesc", "Un pandillero que sale del combate con esta vida o menos se convierte en Némesis.");
+        this.Text("GR-SetDebugLog", "Log de depuración");
+        this.Text("GR-SetDebugLogDesc", "Escribe mensajes detallados en el log de redscript y en la consola de CET.");
+
+        this.Text("GR-UiCampaign", "Campaña");
+        this.Text("GR-UiNemeses", "Némesis");
+        this.Text("GR-UiNoData", "Todavía no hay Némesis.");
+        this.Text("GR-UiWaiting", "Esperando a que se cargue una partida...");
+
+        this.Text("GR-Lang", "es");
+        this.Text("GR-UiCandidates", "Pandilleros heridos en este combate");
+        this.Text("GR-UiPromoteTarget", "Debug: convertir objetivo en Némesis");
+        this.Text("GR-RankSoldier", "Soldado");
+        this.Text("GR-RankLieutenant", "Teniente");
+        this.Text("GR-RankBoss", "Jefe");
+        this.Text("GR-MsgEscaped", "%s se te ha escapado con vida. No te olvidará.");
+        this.Text("GR-MsgGangFull", "%s ya tiene el máximo de Némesis.");
+        this.Text("GR-MsgAgainEscaped", "%s se te ha vuelto a escapar. Cada vez es más fuerte.");
+        this.Text("GR-MsgNemesisDead", "%s ha muerto... por ahora.");
+        this.Text("GR-UiSpawn", "Generar");
+        this.Text("GR-UiDespawnAll", "Quitar todos");
+        this.Text("GR-UiDead", "muerto");
+
+        this.Text("GR-SetLastManFlees", "El último en pie huye");
+        this.Text("GR-SetLastManFleesDesc", "Cuando solo queda un pandillero herido en la pelea, huye gritando. Si consigue escapar, se convierte en Némesis.");
+        this.Text("GR-SetFleeHealth", "Vida para huir (%)");
+        this.Text("GR-SetFleeHealthDesc", "El último pandillero en pie huye con esta vida o menos.");
+        this.Text("GR-UiFleeTarget", "Debug: hacer huir al objetivo");
+        this.Text("GR-MsgFled", "%s ha huido. Volverá a por ti.");
+
+        this.Text("GR-Gang-Maelstrom", "Maelstrom");
+        this.Text("GR-Gang-TygerClaws", "Tyger Claw");
+        this.Text("GR-Gang-Valentinos", "Valentino");
+        this.Text("GR-Gang-SixthStreet", "6th Street");
+        this.Text("GR-Gang-Animals", "Animal");
+        this.Text("GR-Gang-VoodooBoys", "Voodoo Boy");
+        this.Text("GR-Gang-Wraiths", "Wraith");
+        this.Text("GR-Gang-Scavengers", "Scav");
+        this.Text("GR-Gang-Barghest", "Barghest");
+        this.Text("GR-CatAmbush", "Emboscadas");
+        this.Text("GR-SetAmbushEnabled", "Emboscadas de Némesis");
+        this.Text("GR-SetAmbushEnabledDesc", "Los Némesis vivos buscan a V y le tienden emboscadas con algunos pandilleros.");
+        this.Text("GR-SetAmbushCooldown", "Minutos entre emboscadas");
+        this.Text("GR-SetAmbushCooldownDesc", "Minutos reales mínimos entre dos emboscadas.");
+        this.Text("GR-SetAmbushChance", "Probabilidad de emboscada por minuto (%)");
+        this.Text("GR-SetAmbushChanceDesc", "Pasada la espera, se tira cada minuto. Los Némesis de la banda que controla el distrito aparecen mucho más.");
+        this.Text("GR-SetAmbushEscorts", "Máximo de escoltas");
+        this.Text("GR-SetAmbushEscortsDesc", "Pandilleros que acompañan al Némesis. Los de más rango traen más.");
+        this.Text("GR-UiForceAmbush", "Debug: emboscada ya");
+        this.Text("GR-MenuButton", "NÉMESIS");
+        this.Text("GR-MenuTitle", "Némesis");
+        this.Text("GR-MenuPrev", "Banda anterior");
+        this.Text("GR-MenuNext", "Banda siguiente");
+        this.Text("GR-MenuClose", "Cerrar");
+        this.Text("GR-MenuEmpty", "Todavía no hay Némesis. Deja escapar a un pandillero herido y te recordará.");
+        this.Text("GR-MenuBoss", "Jefe");
+        this.Text("GR-MenuLieutenants", "Tenientes");
+        this.Text("GR-MenuSoldiers", "Soldados");
+        this.Text("GR-MenuFallen", "Caídos");
+        this.Text("GR-MenuTraits", "Rasgos");
+        this.Text("GR-MenuStats", "Encuentros %d  |  Renombre %d  |  Emboscadas %d");
+        this.Text("GR-MenuDiedFeud", "A manos de su propia banda");
+        this.Text("GR-MenuDiedV", "A manos de V");
+        this.Text("GR-MenuVacant", "Vacante");
+        this.Text("GR-MenuAlive", "VIVOS");
+        this.Text("GR-MenuFallenShort", "CAÍDOS");
+        this.Text("GR-RankBossF", "Jefa");
+        this.Text("GR-CatHierarchy", "Jerarquía");
+        this.Text("GR-SetVacancyDays", "Días para cubrir una vacante");
+        this.Text("GR-SetVacancyDaysDesc", "Días de juego hasta que alguien ocupa un puesto libre de Teniente o Jefe. Los que tienen mucho renombre ascienden enseguida.");
+        this.Text("GR-SetFeudChance", "Luchas internas (% por día)");
+        this.Text("GR-SetFeudChanceDesc", "Probabilidad por día de juego de que alguien de una banda desafíe a su superior. El que pierde puede morir.");
+        this.Text("GR-MsgPromoted", "%s ha ascendido a %s de los %s.");
+        this.Text("GR-MsgRecruited", "Cara nueva en los %s: %s, %s.");
+        this.Text("GR-MsgFeudKill", "Rumor: %s ha matado a %s y ahora es %s de los %s.");
+        this.Text("GR-MsgFeudDemote", "Rumor: %s ha derrocado a %s y ahora es %s de los %s.");
+        this.Text("GR-MsgFeudFail", "Rumor: %s ha puesto en su sitio a %s.");
+        this.Text("GR-MsgFeudFailDead", "Rumor: %s desafió a %s y lo pagó con su vida.");
+        this.Text("GR-MsgBossDown", "Los %s se han quedado sin jefe. Alguien querrá el trono...");
+        this.Text("GR-Taunt-fireproof-1", "¿Fuego? ¡Me han quemado peor que esto!");
+        this.Text("GR-Taunt-fireproof-2", "Sigue con el fuego, me hace cosquillas.");
+        this.Text("GR-Taunt-insulated-1", "¡Electrocútame cuanto quieras, estoy aislado!");
+        this.Text("GR-Taunt-insulated-2", "Bonitas chispas. No he notado nada.");
+        this.Text("GR-Taunt-toxproof-1", "¿Veneno? Desayuno cosas peores.");
+        this.Text("GR-Taunt-toxproof-2", "¡Tus toxinas no me hacen nada!");
+        this.Text("GR-Taunt-brawler-1", "¡Pegas como un corpo!");
+        this.Text("GR-Taunt-brawler-2", "¿Cuerpo a cuerpo? Mala idea.");
+        this.Text("GR-Taunt-blastproof-1", "Media vida me ha explotado encima. ¡Esfuérzate más!");
+        this.Text("GR-Taunt-blastproof-2", "¡Las explosiones no me asustan!");
+        this.Text("GR-Taunt-firewall-1", "¡Mi hielo se come a netrunners como tú!");
+        this.Text("GR-Taunt-firewall-2", "¿Hackearme a mí? Qué tierno.");
+        this.Text("GR-Taunt-hardhead-1", "¡Tengo el cráneo reforzado, choom!");
+        this.Text("GR-Taunt-hardhead-2", "¡Apunta a la cabeza todo lo que quieras!");
+        this.Text("GR-Taunt-tough-1", "¿Eso es todo lo que tienes?");
+        this.Text("GR-Taunt-tough-2", "¡Mi propia banda me pega más fuerte!");
+        this.Text("GR-Taunt-deadly-1", "¿Lo notas? ¡Y viene más!");
+        this.Text("GR-Taunt-deadly-2", "¡Cada golpe es por lo que me hiciste!");
+        this.Text("GR-Taunt-fear_fire-1", "¡No, el fuego no! ¡Otra vez no!");
+        this.Text("GR-Taunt-fear_fire-2", "¡Aparta ese fuego de mí!");
+        this.Text("GR-Taunt-weak_shock-1", "¡Agh! ¡Se me fríe el cromo!");
+        this.Text("GR-Taunt-weak_shock-2", "¡Para con las descargas, joder!");
+        this.Text("GR-Taunt-weak_tox-1", "No... puedo... respirar...");
+        this.Text("GR-Taunt-weak_tox-2", "¡¿Qué me has metido?!");
+        this.Text("GR-Taunt-weak_melee-1", "¡Atrás! ¡Quita esos puños!");
+        this.Text("GR-Taunt-weak_melee-2", "¡De cerca no, de cerca no!");
+        this.Text("GR-Taunt-weak_blast-1", "¡¿Granadas?! ¡¿Se te ha ido la cabeza?!");
+        this.Text("GR-Taunt-weak_blast-2", "¡Mis oídos! ¡Maldito seas!");
+        this.Text("GR-Taunt-weak_hack-1", "¡Sal de mi cabeza!");
+        this.Text("GR-Taunt-weak_hack-2", "¡Mis implantes! ¡¿Qué me estás haciendo?!");
+        this.Text("GR-Taunt-glass_jaw-1", "¡En la cara no!");
+        this.Text("GR-Taunt-glass_jaw-2", "¡Agh, mi cabeza!");
+        this.Text("GR-Taunt-Low-1", "Esto no ha terminado... ¡ni de lejos!");
+        this.Text("GR-Taunt-Low-2", "¡Me las pagarás, lo juro!");
+        this.Text("GR-Taunt-Low-3", "¡No voy a morir aquí! ¡No por ti!");
+        this.Text("GR-Taunt-PlayerLow-1", "¡Te estás desangrando, V! ¡Como yo aquella vez!");
+        this.Text("GR-Taunt-PlayerLow-2", "Mírate, casi no te tienes en pie.");
+        this.Text("GR-Taunt-PlayerLow-3", "Ya casi está. ¡No te muevas!");
+        this.Text("GR-SetAmbushSms", "SMS de aviso (segundos antes)");
+        this.Text("GR-SetAmbushSmsDesc", "El Némesis escribe a V estos segundos antes de la emboscada. 0 = sin aviso, ataca enseguida.");
+        this.Text("GR-UiSmsAmbush", "Debug: SMS + emboscada en 15 s");
+        this.Text("GR-Sms-1", "Sé dónde estás, V. Nos vemos muy pronto.");
+        this.Text("GR-Sms-2", "¿Creías que no me ibas a ver más? Mira detrás de ti en un minuto.");
+        this.Text("GR-Sms-3", "Sigo respirando gracias a ti, mercenario. Ese fue tu error.");
+        this.Text("GR-Sms-4", "Mi gente va de camino. Disfruta tu último minuto tranquilo.");
+        this.Text("GR-Sms-5", "Llevo varias calles siguiéndote. Hora de ajustar cuentas.");
+        this.Text("GR-Sms-6", "Me dejaste desangrándome en la calle. Ahora te toca a ti.");
+        this.Text("GR-CatGig", "Gigs");
+        this.Text("GR-SetGigEnabled", "Némesis en los gigs");
+        this.Text("GR-SetGigEnabledDesc", "Durante un gig de un fixer, un Némesis vivo de la banda contra la que pelea V puede llegar como refuerzo.");
+        this.Text("GR-SetGigChance", "Probabilidad por gig (%)");
+        this.Text("GR-SetGigChanceDesc", "Se tira una vez por gig, cuando V empieza a pelear contra esa banda.");
+        this.Text("GR-MsgGig", "¡%s se ha enterado de que venías y ha traído refuerzos!");
+        this.Text("GR-Gig-1", "Este encargo lleva tu nombre, V. Mi pistola también.");
+        this.Text("GR-Gig-2", "¡Nadie toca a mi gente sin vérselas conmigo!");
+        this.Text("GR-Gig-3", "Sabía que el fixer te mandaría a ti. Te estaba esperando.");
+        this.Text("GR-MsgAmbush", "¡Emboscada! %s te ha encontrado.");
+        this.Text("GR-Ambush-1", "¿Te acuerdas de mí, V? Porque yo de ti sí.");
+        this.Text("GR-Ambush-2", "Te dije que volvería.");
+        this.Text("GR-Ambush-3", "Me dejaste con vida. Gran error.");
+        this.Text("GR-Ambush-4", "Llevo días buscándote, mercenario.");
+        this.Text("GR-Ambush-5", "¡Esta vez no te escapas!");
+        this.Text("GR-Ambush-6", "Mira quién está aquí. Hora de cobrar.");
+        this.Text("GR-MsgTraitStrong", "Fortaleza descubierta - %s: %s");
+        this.Text("GR-MsgTraitWeak", "Debilidad descubierta - %s: %s");
+        this.Text("GR-MsgScan", "%s - Fortalezas: %s. Debilidades: %s.");
+        this.Text("GR-UiNone", "ninguna");
+        this.Text("GR-UiMarkDead", "Marcar muerto");
+        this.Text("GR-Trait-fireproof", "Resistente al fuego");
+        this.Text("GR-Trait-fear_fire", "Débil al fuego");
+        this.Text("GR-Trait-insulated", "Resistente a la electricidad");
+        this.Text("GR-Trait-weak_shock", "Débil a la electricidad");
+        this.Text("GR-Trait-toxproof", "Resistente a las toxinas");
+        this.Text("GR-Trait-weak_tox", "Débil a las toxinas");
+        this.Text("GR-Trait-brawler", "Curtido en peleas (resiste cuerpo a cuerpo)");
+        this.Text("GR-Trait-weak_melee", "Débil al cuerpo a cuerpo");
+        this.Text("GR-Trait-blastproof", "Resistente a explosivos");
+        this.Text("GR-Trait-weak_blast", "Débil a explosivos");
+        this.Text("GR-Trait-firewall", "Cortafuegos (resiste hackeos)");
+        this.Text("GR-Trait-weak_hack", "Débil a los hackeos");
+        this.Text("GR-Trait-hardhead", "Cabeza dura (resiste disparos a la cabeza)");
+        this.Text("GR-Trait-glass_jaw", "Mandíbula de cristal (débil a disparos a la cabeza)");
+        this.Text("GR-Trait-tough", "Piel dura (recibe menos daño)");
+        this.Text("GR-Trait-deadly", "Letal (golpea más fuerte a V)");
+
+        this.Text("GR-Flee-1", "¡Esto no se acaba aquí, choom! ¡Volveré a por ti!");
+        this.Text("GR-Flee-2", "¡Retirada! ¡Me largo de aquí!");
+        this.Text("GR-Flee-3", "Me acordaré de tu cara, mercenario... ¡te lo juro!");
+        this.Text("GR-Flee-4", "¡Ya nos veremos las caras, me oyes!");
+        this.Text("GR-Flee-5", "Disfrútalo mientras puedas. ¡La próxima vez no fallaré!");
+        this.Text("GR-Flee-6", "¡Mi banda va a saber cómo te llamas!");
+        this.Text("GR-Flee-7", "¡Hoy no me matas, gonk!");
+        this.Text("GR-Flee-8", "¡Corred la voz! ¡Este merc ya está muerto!");
+    }
+}

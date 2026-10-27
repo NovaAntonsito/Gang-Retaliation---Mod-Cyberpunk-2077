@@ -1,0 +1,5 @@
+* text=auto
+*.reds text eol=lf
+*.lua text eol=lf
+*.xl text eol=lf
+*.archive binary

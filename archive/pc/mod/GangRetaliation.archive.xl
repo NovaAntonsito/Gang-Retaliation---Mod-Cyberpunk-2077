@@ -1,0 +1,8 @@
+journal:
+  - gangretaliation\journal\gangretaliation.journal
+
+localization:
+  onscreens:
+    en-us: gangretaliation\localization\en-us\onscreens\gangretaliation.json
+    es-es: gangretaliation\localization\es-es\onscreens\gangretaliation.json
+    es-mx: gangretaliation\localization\es-mx\onscreens\gangretaliation.json
