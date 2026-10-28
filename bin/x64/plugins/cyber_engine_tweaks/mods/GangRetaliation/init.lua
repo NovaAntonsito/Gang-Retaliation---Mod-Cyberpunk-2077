@@ -7,6 +7,8 @@ local War = require("modules/war")
 local Escorts = require("modules/escorts")
 
 local GR = {
+    -- Version dev: ventana de CET con los botones de debug. release.py lo pone en false.
+    dev = true, -- GR_DEV_FLAG
     overlayOpen = false,
     campaignId = 0,
     sessionToken = 0,
@@ -205,9 +207,17 @@ local function processDeaths()
         local n = findNemesis(spawner:GetDeath(i))
         if n and n.status ~= "dead" then
             local kind = spawner:GetDeathKind(i)
+            local cause = spawner:GetDeathCause(i)
             n.status = "dead"
             n.diedAt = os.time()
             n.deathDay = gameDay()
+            -- diedBy: "v" | "police" | "gang" (diedByGang = banda) | "other"; "feud" lo pone Hierarchy.
+            n.diedByGang = nil
+            if string.sub(cause, 1, 5) == "gang:" then
+                n.diedBy, n.diedByGang = "gang", string.sub(cause, 6)
+            else
+                n.diedBy = cause
+            end
             Store.dirty = true
 
             local settings = getSettings()
@@ -215,8 +225,14 @@ local function processDeaths()
                 day = gameDay(), random = math.random,
                 settings = { returnChancePercent = settings and settings.returnChancePercent or 40 },
             })
-            debugLog(string.format("%s muere (%s): %s", labelOf(n), kind, returns and ("vuelve el dia " .. string.format("%.1f", n.returnDay)) or "no vuelve"))
-            if kind == "confirmed" then
+            debugLog(string.format("%s muere (%s, %s): %s", labelOf(n), kind, cause, returns and ("vuelve el dia " .. string.format("%.1f", n.returnDay)) or "no vuelve"))
+            if n.diedBy == "police" then
+                notify(string.format(text("GR-MsgNemesisDeadPolice", "Rumor: the NCPD took down %s."), labelOf(n)))
+            elseif n.diedBy == "gang" then
+                notify(string.format(text("GR-MsgNemesisDeadGang", "Rumor: %s was taken down by the %s."), labelOf(n), Names.gangLabel(n.diedByGang)))
+            elseif n.diedBy == "other" then
+                notify(string.format(text("GR-MsgNemesisDeadOther", "%s is dead. Nobody knows who did it."), labelOf(n)))
+            elseif kind == "confirmed" then
                 notify(string.format(text("GR-MsgNemesisConfirmed", "%s is dead. For good this time."), labelOf(n)))
             else
                 notify(string.format(text("GR-MsgNemesisDead", "%s is dead... for now."), labelOf(n)))
@@ -400,6 +416,14 @@ local function hierarchyEvent(kind, a, b)
         notify(string.format(text("GR-MsgFeudDemote", "Rumor: %s overthrew %s and is now %s of the %s."), nameA, nameB, rankA, gang))
     elseif kind == "feudFail" then
         notify(string.format(text("GR-MsgFeudFail", "Rumor: %s put %s in their place."), nameA, nameB))
+    elseif kind == "policeKill" then
+        notify(string.format(text("GR-MsgNemesisDeadPolice", "Rumor: the NCPD took down %s."), nameA .. " (" .. gang .. ")"))
+    elseif kind == "policeArrest" then
+        notify(string.format(text("GR-MsgPoliceArrest", "Rumor: the NCPD arrested %s. They will be out in a few days."), nameA .. " (" .. gang .. ")"))
+    elseif kind == "policeEscape" then
+        notify(string.format(text("GR-MsgPoliceEscape", "Rumor: %s shot their way out of an NCPD raid."), nameA .. " (" .. gang .. ")"))
+    elseif kind == "released" then
+        notify(string.format(text("GR-MsgReleased", "%s is back on the street."), nameA .. " (" .. gang .. ")"))
     elseif kind == "feudFailDead" then
         notify(string.format(text("GR-MsgFeudFailDead", "Rumor: %s challenged %s and paid with their life."), nameB, nameA))
     end
@@ -492,7 +516,72 @@ local function trySkirmish(force)
     return "skirmish " .. a .. " vs " .. d
 end
 
-local function updateHierarchy(feudChance)
+-- Redada de la NCPD cerca de V: un Nemesis de la zona y su escolta contra una patrulla.
+-- Si sobrevive (se borra vivo al acabar), gana renombre; si muere, processDeaths ve la causa.
+local function tryRaid(force)
+    local settings = getSettings()
+    local spawner = getSpawner()
+    if not settings or not spawner or not settings.enabled then return "no systems" end
+    if not force then
+        if (settings.raidChancePercent or 0) <= 0 then return "disabled" end
+        if os.time() - (GR.lastRaid or 0) < 900 then return "cooldown" end
+        if math.random(100) > settings.raidChancePercent then return "roll failed" end
+    end
+    local blocker = spawner:GetAmbushBlocker()
+    if blocker ~= "" then return "blocked: " .. blocker end
+
+    local campaign = Store.campaign(GR.campaignId)
+    local warSys = getSystem("GangRetaliation.GRWar")
+    local districtGangs = (warSys and War.districtGangs(campaign, warSys:GetCurrentDistrict()))
+        or Ambush.parseGangs(spawner:GetDistrictGangs())
+    local n = Ambush.pick(campaign.nemeses, districtGangs, false)
+    if not n then return "no living Nemesis" end
+
+    pushTraits(n)
+    if not spawner:StartRaid(n.id, n.recordID, n.appearance or "", Ambush.escorts(n, settings.ambushMaxEscorts), fullName(n), Ambush.police(n)) then
+        return "spawn failed"
+    end
+    GR.lastRaid = os.time()
+    GR.raidId = n.id
+    notify(string.format(text("GR-MsgRaid", "The NCPD is raiding %s nearby!"), labelOf(n)))
+    return "raid #" .. n.id
+end
+
+-- Recompensa de la NCPD por ayudar a acabar con la banda, segun el rango del Nemesis.
+local raidBounty = { 1000, 2500, 5000 }
+
+local function checkRaid()
+    local spawner = getSpawner()
+    if not GR.raidId or not spawner or spawner:IsRaidActive() then return end
+    local n = findNemesis(GR.raidId)
+    GR.raidId = nil
+    local outcome = spawner:TakeRaidOutcome()
+    if outcome == "helpedPolice" or outcome == "helpedPoliceHurtCops" then
+        local bounty = raidBounty[(n and n.rank) or 1] or raidBounty[1]
+        -- Si V le pego a algun policia, la mitad se va en gastos medicos de los agentes.
+        local deducted = outcome == "helpedPoliceHurtCops"
+        local amount = deducted and math.floor(bounty / 2) or bounty
+        if spawner:GiveMoney(amount) then
+            local msg
+            if deducted then
+                msg = string.format(text("GR-SmsRaidBountyCut", "Thanks for the assist, citizen. %d eurodollars were deducted for our wounded officers' medical bills. %d eurodollars have been wired to your account."), bounty - amount, amount)
+            else
+                msg = string.format(text("GR-SmsRaidBounty", "Thanks for the assist, citizen. %d eurodollars have been wired to your account."), amount)
+            end
+            local phone = getSystem("GangRetaliation.GRPhone")
+            -- Basta con el SMS de la NCPD: el aviso en pantalla solo si no se pudo mandar.
+            if not phone or not phone:SendBounty(deducted, msg) then notify(msg) end
+            debugLog("Redada: recompensa NCPD " .. amount .. (deducted and " (con descuento)" or ""))
+        end
+    end
+    if n and n.status ~= "dead" then
+        Hierarchy.addRenown(n, 2)
+        Store.dirty = true
+        notify(string.format(text("GR-MsgPoliceEscape", "Rumor: %s shot their way out of an NCPD raid."), labelOf(n)))
+    end
+end
+
+local function updateHierarchy(feudChance, policeChance)
     local settings = getSettings()
     local spawner = getSpawner()
     if not settings or not spawner or not settings.enabled then return end
@@ -502,6 +591,7 @@ local function updateHierarchy(feudChance)
         settings = {
             vacancyDays = settings.vacancyDays,
             feudChancePercent = feudChance or settings.feudChancePercent,
+            policeChancePercent = policeChance or settings.policeChancePercent,
             maxPerGang = settings.maxPerGang,
             returnChancePercent = settings.returnChancePercent,
         },
@@ -614,7 +704,17 @@ local function pushMenu()
     for _, n in ipairs(list) do
         local cause = ""
         if n.status == "dead" then
-            cause = n.diedBy == "feud" and text("GR-MenuDiedFeud", "Killed by their own gang") or text("GR-MenuDiedV", "Killed by V")
+            if n.diedBy == "feud" then
+                cause = text("GR-MenuDiedFeud", "Killed by their own gang")
+            elseif n.diedBy == "police" then
+                cause = text("GR-MenuDiedPolice", "Killed by the NCPD")
+            elseif n.diedBy == "gang" then
+                cause = string.format(text("GR-MenuDiedGang", "Killed by the %s"), Names.gangLabel(n.diedByGang))
+            elseif n.diedBy == "other" then
+                cause = text("GR-MenuDiedOther", "Died in unclear circumstances")
+            else
+                cause = text("GR-MenuDiedV", "Killed by V")
+            end
         end
         local title = (l == "es") and n.titleEs or n.titleEn
 
@@ -748,11 +848,14 @@ registerForEvent("onUpdate", function(delta)
         if not okH then print("[GangRetaliation] Error en jerarquia: " .. tostring(errH)) end
         local okS, resultS = pcall(trySkirmish, false)
         debugLog("Escaramuza: " .. tostring(resultS))
+        local okR, resultR = pcall(tryRaid, false)
+        debugLog("Redada: " .. tostring(resultR))
     end
 
     processPending()
     processDeaths()
     checkEncounter()
+    checkRaid()
     processAppearances()
     processReveals()
     flushMessages(delta)
@@ -769,10 +872,32 @@ end)
 registerForEvent("onOverlayOpen", function() GR.overlayOpen = true end)
 registerForEvent("onOverlayClose", function() GR.overlayOpen = false end)
 
+-- Version release: solo lo que sirve para un reporte de error.
+local function drawReleaseWindow()
+    if ImGui.Begin("Gang Retaliation") then
+        if GR.campaignId == 0 then
+            ImGui.Text(text("GR-UiWaiting", "Waiting for a loaded save..."))
+        else
+            local alive, dead = 0, 0
+            for _, n in ipairs(Store.campaign(GR.campaignId).nemeses) do
+                if n.status == "dead" then dead = dead + 1 else alive = alive + 1 end
+            end
+            ImGui.Text(text("GR-UiCampaign", "Campaign") .. ": " .. tostring(GR.campaignId))
+            ImGui.Text(string.format("%s: %d (+%d %s)", text("GR-UiNemeses", "Nemeses"), alive, dead, text("GR-UiDead", "dead")))
+            ImGui.TextDisabled(string.format("game day %.2f", gameDay()))
+        end
+    end
+    ImGui.End()
+end
+
 registerForEvent("onDraw", function()
     if not GR.overlayOpen then return end
+    if not GR.dev then
+        drawReleaseWindow()
+        return
+    end
 
-    if ImGui.Begin("Gang Retaliation") then
+    if ImGui.Begin("Gang Retaliation (dev)") then
         if GR.campaignId == 0 then
             ImGui.Text(text("GR-UiWaiting", "Waiting for a loaded save..."))
         else
@@ -906,6 +1031,17 @@ registerForEvent("onDraw", function()
                 local ok, err = pcall(updateHierarchy, 100)
                 GR.lastAction = ok and "feud" or tostring(err)
             end
+            ImGui.SameLine()
+            if ImGui.Button("Debug: force NCPD clash") then
+                for _, state in pairs(Store.ensureCampaign(GR.campaignId).hierarchy or {}) do state.lastPoliceDay = nil end
+                local ok, err = pcall(updateHierarchy, nil, 100)
+                GR.lastAction = ok and "NCPD clash" or tostring(err)
+            end
+            if ImGui.Button("Debug: NCPD raid now") then
+                local ok, res = pcall(tryRaid, true)
+                GR.lastAction = tostring(res)
+            end
+            ImGui.SameLine()
             if ImGui.Button("Debug: start war") then
                 local settings = getSettings()
                 local campaign = Store.ensureCampaign(GR.campaignId)

@@ -12,16 +12,33 @@ public class GRPhone extends ScriptableSystem {
     }
 
     public func SendThreat(from: String, fallbackText: String) -> Bool {
+        return this.SendJournalSms("gr_unknown", "gr_threats", 1, 12, from, fallbackText);
+    }
+
+    // Recompensa de la NCPD (redadas): contacto "NCPD" del journal del mod. sms_01-06 = pago
+    // completo, sms_07-09 = con descuento por los agentes heridos.
+    public func SendBounty(deducted: Bool, fallbackText: String) -> Bool {
+        if deducted {
+            return this.SendJournalSms("gr_ncpd", "gr_bounty", 7, 9, "NCPD", fallbackText);
+        }
+        return this.SendJournalSms("gr_ncpd", "gr_bounty", 1, 6, "NCPD", fallbackText);
+    }
+
+    // Activa el siguiente SMS de la conversacion entre sms_<first> y sms_<last> (contacts/<contacto>/
+    // <conversacion>/sms_NN, ver build_archive.py); al gastarlos todos, ese tramo vuelve a empezar.
+    // Sin el .archive: solo aviso.
+    private func SendJournalSms(contactId: String, conversationId: String, first: Int32, last: Int32, from: String, fallbackText: String) -> Bool {
         let journal: ref<JournalManager> = GameInstance.GetJournalManager(this.GetGameInstance());
-        let contact: String = "contacts/gr_unknown";
-        let thread: String = contact + "/gr_threats/sms_";
+        let contact: String = "contacts/" + contactId;
+        let conversation: String = contact + "/" + conversationId;
+        let thread: String = conversation + "/sms_";
         if !IsDefined(journal.GetEntryByString(contact, "gameJournalContact")) {
             GRLog("SMS: falta el journal del mod, solo aviso");
             return this.SendSms(from, fallbackText);
         }
         let next: Int32 = 0;
-        let i: Int32 = 1;
-        while i <= 12 && next == 0 {
+        let i: Int32 = first;
+        while i <= last && next == 0 {
             let entry: wref<JournalEntry> = journal.GetEntryByString(thread + GRPhone.Pad(i), "gameJournalPhoneMessage");
             if IsDefined(entry) && NotEquals(journal.GetEntryState(entry), gameJournalEntryState.Active) {
                 next = i;
@@ -29,15 +46,15 @@ public class GRPhone extends ScriptableSystem {
             i += 1;
         }
         if next == 0 {
-            i = 1;
-            while i <= 12 {
+            i = first;
+            while i <= last {
                 journal.ChangeEntryState(thread + GRPhone.Pad(i), "gameJournalPhoneMessage", gameJournalEntryState.Inactive, JournalNotifyOption.DoNotNotify);
                 i += 1;
             }
-            next = 1;
+            next = first;
         }
         journal.ChangeEntryState(contact, "gameJournalContact", gameJournalEntryState.Active, JournalNotifyOption.DoNotNotify);
-        journal.ChangeEntryState(contact + "/gr_threats", "gameJournalPhoneConversation", gameJournalEntryState.Active, JournalNotifyOption.DoNotNotify);
+        journal.ChangeEntryState(conversation, "gameJournalPhoneConversation", gameJournalEntryState.Active, JournalNotifyOption.DoNotNotify);
         journal.ChangeEntryState(thread + GRPhone.Pad(next), "gameJournalPhoneMessage", gameJournalEntryState.Active, JournalNotifyOption.Notify);
         GRLog("SMS al telefono: sms_" + GRPhone.Pad(next) + " (" + from + ")");
         return true;

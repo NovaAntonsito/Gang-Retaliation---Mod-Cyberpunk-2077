@@ -41,6 +41,11 @@ public class GRDetection extends ScriptableSystem {
 
     private let m_fleeMode: Int32;
 
+    // Huida pendiente: se decide en un golpe o una muerte, pero se ejecuta en el tick (UpdateFleeing).
+    // Cambiar la IA dentro de esos eventos, con el NPC quizas muriendo, puede crashear el juego.
+    private let m_pendingFlee: EntityID;
+    private let m_hasPendingFlee: Bool;
+
     public static func Get(gi: GameInstance) -> ref<GRDetection> {
         return GameInstance.GetScriptableSystemsContainer(gi).Get(n"GangRetaliation.GRDetection") as GRDetection;
     }
@@ -177,11 +182,17 @@ public class GRDetection extends ScriptableSystem {
         ArrayClear(this.m_candidates);
         ArrayClear(this.m_combatants);
         this.m_someoneFled = false;
+        this.m_hasPendingFlee = false;
     }
 
     private func CheckLastStanding() {
         let settings: ref<GRSettings> = GRSettings.Get(this.GetGameInstance());
         if this.m_someoneFled || !IsDefined(settings) || !settings.lastManFlees {
+            return;
+        }
+        // En una redada de la NCPD nadie huye: si no, la banda no cae entera y V no cobra.
+        let spawner: ref<GRSpawner> = GRSpawner.Get(this.GetGameInstance());
+        if IsDefined(spawner) && spawner.IsRaidActive() {
             return;
         }
 
@@ -207,8 +218,22 @@ public class GRDetection extends ScriptableSystem {
         }
         let health: Float = this.GetHealthPercent(last);
         if health > 0.0 && health <= Cast<Float>(settings.fleeHealthPercent) {
-            this.MakeFlee(last);
+            this.m_someoneFled = true;
+            this.m_pendingFlee = last.GetEntityID();
+            this.m_hasPendingFlee = true;
         }
+    }
+
+    private func RunPendingFlee() {
+        if !this.m_hasPendingFlee {
+            return;
+        }
+        this.m_hasPendingFlee = false;
+        let npc: ref<ScriptedPuppet> = GameInstance.FindEntityByID(this.GetGameInstance(), this.m_pendingFlee) as ScriptedPuppet;
+        if !IsDefined(npc) || GRDetection.IsNeutralized(npc) || this.GetHealthPercent(npc) <= 0.0 {
+            return;
+        }
+        this.MakeFlee(npc);
     }
 
     private func Now() -> Float {
@@ -227,10 +252,15 @@ public class GRDetection extends ScriptableSystem {
 
         let puppet: ref<NPCPuppet> = npc as NPCPuppet;
         let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
-        if IsDefined(puppet) && IsDefined(player) {
+        if IsDefined(puppet) && IsDefined(player) && IsDefined(puppet.GetAttitudeAgent()) && IsDefined(puppet.GetAIControllerComponent()) {
             if this.m_fleeMode == 0 || this.m_fleeMode == 2 {
                 puppet.GetAttitudeAgent().SetAttitudeTowards(player.GetAttitudeAgent(), EAIAttitude.AIA_Neutral);
-                let away: Vector4 = Vector4.Normalize(npc.GetWorldPosition() - player.GetWorldPosition());
+                let offset: Vector4 = npc.GetWorldPosition() - player.GetWorldPosition();
+                // Pegados: Normalize de un vector casi nulo da NaN; huir en la direccion en que mira V.
+                if Vector4.Length(offset) < 0.5 {
+                    offset = player.GetWorldForward();
+                }
+                let away: Vector4 = Vector4.Normalize(offset);
                 let wp: WorldPosition;
                 WorldPosition.SetVector4(wp, npc.GetWorldPosition() + away * 60.0);
                 let target: AIPositionSpec;
@@ -263,6 +293,7 @@ public class GRDetection extends ScriptableSystem {
     }
 
     public func UpdateFleeing() {
+        this.RunPendingFlee();
         let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
         let i: Int32 = ArraySize(this.m_fleeing) - 1;
         while i >= 0 {

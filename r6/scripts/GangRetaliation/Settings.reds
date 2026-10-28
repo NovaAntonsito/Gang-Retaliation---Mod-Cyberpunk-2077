@@ -53,6 +53,13 @@ public class GRSettings extends ScriptableSystem {
     public let maxPerGang: Int32 = 8;
 
     @runtimeProperty("ModSettings.mod", "GR-ModName")
+    @runtimeProperty("ModSettings.category", "GR-CatGeneral")
+    @runtimeProperty("ModSettings.category.order", "10")
+    @runtimeProperty("ModSettings.displayName", "GR-SetBossBar")
+    @runtimeProperty("ModSettings.description", "GR-SetBossBarDesc")
+    public let bossBar: Bool = true;
+
+    @runtimeProperty("ModSettings.mod", "GR-ModName")
     @runtimeProperty("ModSettings.category", "GR-CatTriggers")
     @runtimeProperty("ModSettings.category.order", "20")
     @runtimeProperty("ModSettings.displayName", "GR-SetEscapeHealth")
@@ -162,6 +169,26 @@ public class GRSettings extends ScriptableSystem {
     @runtimeProperty("ModSettings.min", "0")
     @runtimeProperty("ModSettings.max", "100")
     public let feudChancePercent: Int32 = 25;
+
+    @runtimeProperty("ModSettings.mod", "GR-ModName")
+    @runtimeProperty("ModSettings.category", "GR-CatHierarchy")
+    @runtimeProperty("ModSettings.category.order", "50")
+    @runtimeProperty("ModSettings.displayName", "GR-SetPoliceChance")
+    @runtimeProperty("ModSettings.description", "GR-SetPoliceChanceDesc")
+    @runtimeProperty("ModSettings.step", "5")
+    @runtimeProperty("ModSettings.min", "0")
+    @runtimeProperty("ModSettings.max", "100")
+    public let policeChancePercent: Int32 = 10;
+
+    @runtimeProperty("ModSettings.mod", "GR-ModName")
+    @runtimeProperty("ModSettings.category", "GR-CatHierarchy")
+    @runtimeProperty("ModSettings.category.order", "50")
+    @runtimeProperty("ModSettings.displayName", "GR-SetRaidChance")
+    @runtimeProperty("ModSettings.description", "GR-SetRaidChanceDesc")
+    @runtimeProperty("ModSettings.step", "5")
+    @runtimeProperty("ModSettings.min", "0")
+    @runtimeProperty("ModSettings.max", "100")
+    public let raidChancePercent: Int32 = 10;
 
     @runtimeProperty("ModSettings.mod", "GR-ModName")
     @runtimeProperty("ModSettings.category", "GR-CatHierarchy")

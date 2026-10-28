@@ -17,7 +17,7 @@ end
 function Ambush.pick(nemeses, districtGangs, metOnly)
     local pool, total = {}, 0
     for _, n in ipairs(nemeses) do
-        if n.status ~= "dead" and n.recordID and n.id and (not metOnly or Ambush.hasMetV(n)) then
+        if n.status ~= "dead" and not n.jailedUntil and n.recordID and n.id and (not metOnly or Ambush.hasMetV(n)) then
             local weight = (n.rank or 1) * (districtGangs[n.gang] and 4 or 1)
             total = total + weight
             table.insert(pool, { n = n, w = weight })
@@ -31,6 +31,24 @@ function Ambush.pick(nemeses, districtGangs, metOnly)
         if roll <= 0 then return entry.n end
     end
     return pool[#pool].n
+end
+
+-- Patrullas de la NCPD para las redadas (recordIDs del prevention system del juego).
+Ambush.policeRecords = {
+    "Character.prevention_police_handgun_wa",
+    "Character.prevention_police_rifle_ma",
+    "Character.prevention_police_rifle_wa",
+    "Character.prevention_police_shotgun_ma",
+    "Character.prevention_police_shotgun_wa",
+}
+
+-- Policias para la redada: mas cuanto mas alto el rango del Nemesis (3 / 4 / 5).
+function Ambush.police(nemesis)
+    local ids = {}
+    for i = 1, 2 + (nemesis.rank or 1) do
+        ids[i] = Ambush.policeRecords[math.random(#Ambush.policeRecords)]
+    end
+    return table.concat(ids, ",")
 end
 
 function Ambush.escorts(nemesis, maxEscorts)

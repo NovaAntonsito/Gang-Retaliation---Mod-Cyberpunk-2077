@@ -240,6 +240,50 @@ local function feud(campaign, gang, ctx)
     end
 end
 
+-- Choque con la NCPD fuera de camara: un Nemesis de la banda escapa (gana renombre), muere
+-- (puede volver, como cualquier muerte normal) o cae arrestado unos dias (n.jailedUntil: no embosca).
+local function policeClash(campaign, gang, ctx)
+    local state = gangState(campaign, gang)
+    local today = math.floor(ctx.day)
+    if state.lastPoliceDay == today then return end
+    state.lastPoliceDay = today
+    if ctx.random() * 100 >= (ctx.settings.policeChancePercent or 0) then return end
+
+    local pool = {}
+    for _, n in ipairs(Hierarchy.members(campaign, gang)) do
+        if not n.jailedUntil and not ctx.isSpawned(n.id) then table.insert(pool, n) end
+    end
+    if #pool == 0 then return end
+    local n = pool[math.floor(ctx.random() * #pool) + 1]
+
+    local power = (n.renown or 0) + (n.rank or 1) * 2 + ctx.random() * 6
+    if power >= 5 + ctx.random() * 8 then
+        Hierarchy.addRenown(n, 2)
+        ctx.event("policeEscape", n)
+    elseif ctx.random() < 0.5 then
+        n.status = "dead"
+        n.diedAt = os.time()
+        n.diedBy = "police"
+        n.deathDay = ctx.day
+        Hierarchy.resolveDeath(n, "normal", ctx)
+        Hierarchy.onDeath(campaign, n, ctx.day)
+        ctx.event("policeKill", n)
+    else
+        n.jailedUntil = ctx.day + 2 + ctx.random() * 3
+        n.renown = math.max(0, (n.renown or 0) - 1)
+        ctx.event("policeArrest", n)
+    end
+end
+
+local function processReleases(campaign, ctx)
+    for _, n in ipairs(campaign.nemeses) do
+        if n.jailedUntil and (n.status == "dead" or ctx.day >= n.jailedUntil) then
+            n.jailedUntil = nil
+            if n.status ~= "dead" then ctx.event("released", n) end
+        end
+    end
+end
+
 -- Fase 7: muerte de un Nemesis. kind = "confirmed" (remate: cabeza, explosion, desmembrado),
 -- "knockout" (inconsciente) o "normal". Decide si volvera y cuando. Devuelve true si volvera.
 function Hierarchy.resolveDeath(n, kind, ctx)
@@ -262,6 +306,7 @@ function Hierarchy.revive(campaign, n, ctx)
     n.returnDay = nil
     n.diedAt = nil
     n.diedBy = nil
+    n.diedByGang = nil
     n.returns = (n.returns or 0) + 1
     n.origin = "returned"
     n.health = 100
@@ -304,15 +349,17 @@ local function enforceCaps(campaign, gang, ctx)
 end
 
 -- Paso periodico (init.lua lo llama una vez por minuto).
--- ctx = { day, settings = { vacancyDays, feudChancePercent }, random(), isSpawned(id),
+-- ctx = { day, settings = { vacancyDays, feudChancePercent, policeChancePercent }, random(), isSpawned(id),
 --         addNemesis(data), event(kind, a, b, reason) }
 function Hierarchy.update(campaign, ctx)
     processReturns(campaign, ctx)
+    processReleases(campaign, ctx)
     -- Tambien las bandas sin nadie vivo: si V acaba con todos, la cupula se rehace con reclutas.
     for _, gang in ipairs(Hierarchy.knownGangs(campaign)) do
         enforceCaps(campaign, gang, ctx)
         fillRanks(campaign, gang, ctx)
         feud(campaign, gang, ctx)
+        policeClash(campaign, gang, ctx)
     end
 end
 

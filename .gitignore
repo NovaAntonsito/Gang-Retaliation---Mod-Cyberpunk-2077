@@ -8,3 +8,7 @@ bin/x64/plugins/cyber_engine_tweaks/mods/GangRetaliation/data/*
 
 # Logs
 *.log
+/.idea/GangRetaliation-dev.iml
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/vcs.xml

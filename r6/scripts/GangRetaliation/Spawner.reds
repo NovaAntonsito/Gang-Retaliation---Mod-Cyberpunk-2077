@@ -12,10 +12,33 @@ public class GRSpawner extends ScriptableSystem {
     private let m_mappins: array<NewMappinID>;
     private let m_hasMappin: array<Bool>;
 
+    // Redada de la NCPD: bando de cada entidad (0 = banda, 1 = policia)
+    private let m_sides: array<Int32>;
+    private let m_spawnSide: Int32;
+    private let m_raidMode: Bool;
+    // Lo que hizo V en la redada: golpeo a la banda / a la policia. Al acabar queda el resultado
+    // ("helpedPolice" si la banda cayo entera con ayuda de V; "helpedPoliceHurtCops" si ademas V
+    // le pego a algun policia: cobra con descuento).
+    private let m_raidHitGang: Bool;
+    private let m_raidHitPolice: Bool;
+    private let m_raidOutcome: String;
+    // Diagnostico: ultimo nivel de busqueda visto y ultimo estado "la policia apunta a V".
+    private let m_raidHeat: Int32;
+    // Inmunidad ante la policia: desde que empieza la redada hasta que termina Y V enfunda el arma
+    // (como mucho 60 s despues del final). Mientras dura, nada de lo que haga V cuenta como delito.
+    private let m_policeImmune: Bool;
+    private let m_immuneRaidEnd: Float;
+    private let m_raidPoliceOnV: Bool;
+
     private let m_deaths: array<Int32>;
     private let m_deathKinds: array<String>;
 
     private let m_finisherIds: array<Int32>;
+
+    // Ultimo golpe a cada Nemesis vivo (GRTraits.HitSource) y causa de cada muerte.
+    private let m_lastHitIds: array<Int32>;
+    private let m_lastHitBy: array<String>;
+    private let m_deathCauses: array<String>;
 
     private let m_appearanceReports: array<String>;
 
@@ -152,6 +175,7 @@ public class GRSpawner extends ScriptableSystem {
         let noMappin: NewMappinID;
         ArrayPush(this.m_mappins, noMappin);
         ArrayPush(this.m_hasMappin, false);
+        ArrayPush(this.m_sides, this.m_spawnSide);
         return true;
     }
 
@@ -190,11 +214,17 @@ public class GRSpawner extends ScriptableSystem {
         if nemesisId > 0 {
             let kind: String = this.DeathKind(nemesisId, GameInstance.FindEntityByID(this.GetGameInstance(), id) as ScriptedPuppet);
             ArrayPush(this.m_deaths, nemesisId);
+            let cause: String = this.TakeLastHit(nemesisId);
+            // Un remate solo es definitivo si lo dio V.
+            if Equals(kind, "confirmed") && NotEquals(cause, "v") {
+                kind = "normal";
+            }
             ArrayPush(this.m_deathKinds, kind);
+            ArrayPush(this.m_deathCauses, cause);
             ArrayRemove(this.m_finisherIds, nemesisId);
 
             this.m_nemesisIDs[index] = 0;
-            GRLog("Nemesis #" + IntToString(nemesisId) + " muerto (" + kind + ")");
+            GRLog("Nemesis #" + IntToString(nemesisId) + " muerto (" + kind + ", " + cause + ")");
         }
     }
 
@@ -214,7 +244,33 @@ public class GRSpawner extends ScriptableSystem {
         return "normal";
     }
 
+    public func RecordHitBy(nemesisId: Int32, source: String) {
+        let i: Int32 = ArrayFindFirst(this.m_lastHitIds, nemesisId);
+        if i >= 0 {
+            this.m_lastHitBy[i] = source;
+        } else {
+            ArrayPush(this.m_lastHitIds, nemesisId);
+            ArrayPush(this.m_lastHitBy, source);
+        }
+        // Si otro le da el ultimo golpe, el remate de V ya no cuenta.
+        if NotEquals(source, "v") {
+            ArrayRemove(this.m_finisherIds, nemesisId);
+        }
+    }
+
+    private func TakeLastHit(nemesisId: Int32) -> String {
+        let i: Int32 = ArrayFindFirst(this.m_lastHitIds, nemesisId);
+        if i < 0 {
+            return "other";
+        }
+        let source: String = this.m_lastHitBy[i];
+        ArrayErase(this.m_lastHitIds, i);
+        ArrayErase(this.m_lastHitBy, i);
+        return source;
+    }
+
     public func RecordPlayerHit(nemesisId: Int32, finisher: Bool) {
+        this.RecordHitBy(nemesisId, "v");
         if finisher {
             if !ArrayContains(this.m_finisherIds, nemesisId) {
                 ArrayPush(this.m_finisherIds, nemesisId);
@@ -379,6 +435,7 @@ public class GRSpawner extends ScriptableSystem {
         if StrLen(this.GetAmbushBlocker()) > 0 || this.IsNemesisSpawned(nemesisId) {
             return false;
         }
+        this.m_raidMode = false;
         if !this.SpawnGroup(nemesisId, recordID, appearance, escortRecords, line, speaker, 25.0) {
             return false;
         }
@@ -391,6 +448,7 @@ public class GRSpawner extends ScriptableSystem {
         if StrLen(this.GetReinforcementBlocker()) > 0 || this.IsNemesisSpawned(nemesisId) {
             return false;
         }
+        this.m_raidMode = false;
         if !this.SpawnGroup(nemesisId, recordID, appearance, escortRecords, line, speaker, 20.0) {
             return false;
         }
@@ -433,13 +491,195 @@ public class GRSpawner extends ScriptableSystem {
         return true;
     }
 
+    // Redada: el Nemesis y su escolta contra una patrulla de la NCPD, a unos 30 m de V (como las
+    // escaramuzas de GRWar). policeRecords: recordIDs separados por comas.
+    public func StartRaid(nemesisId: Int32, recordID: String, appearance: String, escortRecords: String, speaker: String, policeRecords: String) -> Bool {
+        if StrLen(this.GetAmbushBlocker()) > 0 || this.IsNemesisSpawned(nemesisId) {
+            return false;
+        }
+        let angles: array<Float> = [0.0, 60.0, -60.0, 120.0, -120.0, 180.0];
+        for angle in angles {
+            let posA: Vector4 = this.FindWarSpot(angle - 13.0, 30.0);
+            let posB: Vector4 = this.FindWarSpot(angle + 13.0, 30.0);
+            if !Vector4.IsZero(posA) && !Vector4.IsZero(posB) && Vector4.Distance(posA, posB) > 6.0 {
+                this.m_raidMode = true;
+                this.m_raidHitGang = false;
+                this.m_raidHitPolice = false;
+                this.m_raidOutcome = "";
+                this.m_raidHeat = 0;
+                this.m_policeImmune = true;
+                this.m_immuneRaidEnd = 0.0;
+                this.m_raidPoliceOnV = false;
+                this.m_spawnSide = 0;
+                let facing: Quaternion = EulerAngles.ToQuat(Vector4.ToRotation(posB - posA));
+                if !this.SpawnAt(nemesisId, recordID, appearance, posA, facing, "", speaker) {
+                    this.m_raidMode = false;
+                    return false;
+                }
+                this.SpawnRaidSide(escortRecords, posA, posB);
+                this.m_spawnSide = 1;
+                this.SpawnRaidSide(policeRecords, posB, posA);
+                this.m_spawnSide = 0;
+
+                this.m_ambushActive = true;
+                this.m_ambushSawCombat = true;
+                this.m_ambushStart = this.Now();
+                this.m_ambushCalmSince = 0.0;
+                GRLog("Redada NCPD: Nemesis #" + IntToString(nemesisId) + ", " + IntToString(ArraySize(this.m_entityIDs)) + " NPC");
+                return true;
+            }
+        }
+        GRLog("Redada NCPD: sin sitio cerca de V");
+        return false;
+    }
+
+    private func SpawnRaidSide(records: String, at: Vector4, facing: Vector4) {
+        if StrLen(records) == 0 {
+            return;
+        }
+        let list: array<String> = StrSplit(records, ",");
+        let orientation: Quaternion = EulerAngles.ToQuat(Vector4.ToRotation(facing - at));
+        let i: Int32 = 0;
+        while i < ArraySize(list) {
+            let pos: Vector4 = at + new Vector4(RandRangeF(-2.5, 2.5) + Cast<Float>(i) * 0.8, RandRangeF(-2.5, 2.5), 0.0, 0.0);
+            this.SpawnAt(0, list[i], "", pos, orientation, "", "");
+            i += 1;
+        }
+    }
+
+    // V (o un aliado) golpeo a alguien de la redada.
+    public func RecordRaidHitByV(id: EntityID) {
+        if !this.m_raidMode {
+            return;
+        }
+        let index: Int32 = this.IndexOf(id);
+        if index < 0 {
+            return;
+        }
+        if this.m_sides[index] == 0 {
+            this.m_raidHitGang = true;
+        } else {
+            this.m_raidHitPolice = true;
+        }
+    }
+
+    // Resultado de la ultima redada terminada (se vacia al leerlo).
+    public func TakeRaidOutcome() -> String {
+        let outcome: String = this.m_raidOutcome;
+        this.m_raidOutcome = "";
+        return outcome;
+    }
+
+    public func GiveMoney(amount: Int32) -> Bool {
+        let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
+        if !IsDefined(player) || amount <= 0 {
+            return false;
+        }
+        return GameInstance.GetTransactionSystem(this.GetGameInstance()).GiveItem(player, MarketSystem.Money(), amount);
+    }
+
+    public func IsRaidActive() -> Bool {
+        return this.m_ambushActive && this.m_raidMode;
+    }
+
+    // Vivos de un bando (los que aun no aparecen cuentan como vivos).
+    private func SideAlive(side: Int32) -> Int32 {
+        let count: Int32 = 0;
+        let i: Int32 = 0;
+        while i < ArraySize(this.m_entityIDs) {
+            if this.m_sides[i] == side {
+                let npc: ref<ScriptedPuppet> = GameInstance.FindEntityByID(this.GetGameInstance(), this.m_entityIDs[i]) as ScriptedPuppet;
+                if !IsDefined(npc) || !GRDetection.IsNeutralized(npc) {
+                    count += 1;
+                }
+            }
+            i += 1;
+        }
+        return count;
+    }
+
+    // Fin de la redada: un bando sin nadie en pie (y 20 s para que V lo vea) o 3 minutos.
+    // Cada segundo: la policia vuelve a ser amistosa con V (el juego puede cambiarlo en combate)
+    // y se registra si V tiene busqueda o si algun policia lo considera enemigo.
+    private func KeepPoliceFriendly() {
+        let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
+        if !IsDefined(player) || !IsDefined(player.GetAttitudeAgent()) {
+            return;
+        }
+        let onV: Bool = false;
+        let i: Int32 = 0;
+        while i < ArraySize(this.m_entityIDs) {
+            if this.m_sides[i] == 1 {
+                let cop: ref<ScriptedPuppet> = GameInstance.FindEntityByID(this.GetGameInstance(), this.m_entityIDs[i]) as ScriptedPuppet;
+                if IsDefined(cop) && IsDefined(cop.GetAttitudeAgent()) && !GRDetection.IsNeutralized(cop) {
+                    if NotEquals(GameObject.GetAttitudeBetween(cop, player), EAIAttitude.AIA_Friendly) {
+                        onV = true;
+                    }
+                    cop.GetAttitudeAgent().SetAttitudeTowards(player.GetAttitudeAgent(), EAIAttitude.AIA_Friendly);
+                }
+            }
+            i += 1;
+        }
+        let heat: Int32 = Cast<Int32>(player.GetPreventionSystem().GetHeatStageAsInt());
+        if heat != this.m_raidHeat || NotEquals(onV, this.m_raidPoliceOnV) {
+            GRLog("Redada: busqueda=" + IntToString(heat) + " policia no amistosa con V=" + ToString(onV)
+                + " (V golpeo banda=" + ToString(this.m_raidHitGang) + " policia=" + ToString(this.m_raidHitPolice) + ")");
+            this.m_raidHeat = heat;
+            this.m_raidPoliceOnV = onV;
+        }
+    }
+
+    private func TickRaid(now: Float) {
+        this.KeepPoliceFriendly();
+        let fighting: Bool = this.SideAlive(0) > 0 && this.SideAlive(1) > 0;
+        if fighting {
+            this.m_ambushCalmSince = 0.0;
+        } else {
+            if this.m_ambushCalmSince == 0.0 {
+                this.m_ambushCalmSince = now;
+            }
+        }
+        if (!fighting && now - this.m_ambushCalmSince > 20.0) || now - this.m_ambushStart > 180.0 {
+            if this.SideAlive(0) == 0 && this.m_raidHitGang {
+                this.m_raidOutcome = this.m_raidHitPolice ? "helpedPoliceHurtCops" : "helpedPolice";
+            }
+            GRLog("Fin de redada: limpiando (V gang=" + ToString(this.m_raidHitGang) + " police=" + ToString(this.m_raidHitPolice) + ")");
+            this.CheckNeutralized();
+            this.DespawnAll();
+        }
+    }
+
     public func IsAmbushActive() -> Bool {
         return this.m_ambushActive;
+    }
+
+    public func IsPoliceImmune() -> Bool {
+        return this.m_policeImmune;
+    }
+
+    private func IsWeaponDrawn(player: ref<PlayerPuppet>) -> Bool {
+        return IsDefined(GameInstance.GetTransactionSystem(this.GetGameInstance()).GetItemInSlot(player, t"AttachmentSlots.WeaponRight"));
+    }
+
+    private func TickImmunity() {
+        if !this.m_policeImmune || this.IsRaidActive() {
+            return;
+        }
+        let now: Float = this.Now();
+        if this.m_immuneRaidEnd == 0.0 {
+            this.m_immuneRaidEnd = now;
+        }
+        let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
+        if !IsDefined(player) || !this.IsWeaponDrawn(player) || now - this.m_immuneRaidEnd > 60.0 {
+            this.m_policeImmune = false;
+            GRLog("Redada: fin de la inmunidad ante la policia");
+        }
     }
 
     public func Tick() {
         this.CheckNeutralized();
         this.CheckTaunts();
+        this.TickImmunity();
         if !this.m_ambushActive {
             return;
         }
@@ -448,6 +688,10 @@ public class GRSpawner extends ScriptableSystem {
             return;
         }
         let now: Float = this.Now();
+        if this.m_raidMode {
+            this.TickRaid(now);
+            return;
+        }
         if player.IsInCombat() {
             this.m_ambushSawCombat = true;
             this.m_ambushCalmSince = 0.0;
@@ -482,7 +726,9 @@ public class GRSpawner extends ScriptableSystem {
         ArrayClear(this.m_speakers);
         ArrayClear(this.m_mappins);
         ArrayClear(this.m_hasMappin);
+        ArrayClear(this.m_sides);
         this.m_ambushActive = false;
+        this.m_raidMode = false;
     }
 
     public func GetSpawnedCount() -> Int32 {
@@ -499,7 +745,13 @@ public class GRSpawner extends ScriptableSystem {
         if Equals(eventType, DynamicEntityEventType.Spawned) {
             let npc: ref<ScriptedPuppet> = GameInstance.GetDynamicEntitySystem().GetEntity(event.GetEntityID()) as ScriptedPuppet;
             let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
-            if IsDefined(npc) && IsDefined(player) {
+            if IsDefined(npc) && IsDefined(player) && this.m_raidMode {
+                this.SetRaidHostility(index, npc);
+                if this.m_nemesisIDs[index] > 0 && !this.m_hasMappin[index] {
+                    this.AddMappin(index, npc);
+                    ArrayPush(this.m_appearanceReports, IntToString(this.m_nemesisIDs[index]) + ":" + NameToString(npc.GetCurrentAppearanceName()));
+                }
+            } else if IsDefined(npc) && IsDefined(player) {
                 npc.GetAttitudeAgent().SetAttitudeTowards(player.GetAttitudeAgent(), EAIAttitude.AIA_Hostile);
                 StimBroadcasterComponent.SendStimDirectly(player, gamedataStimType.CombatHit, npc);
                 if StrLen(this.m_lines[index]) > 0 {
@@ -508,6 +760,9 @@ public class GRSpawner extends ScriptableSystem {
                 if this.m_nemesisIDs[index] > 0 && !this.m_hasMappin[index] {
                     this.AddMappin(index, npc);
                     ArrayPush(this.m_appearanceReports, IntToString(this.m_nemesisIDs[index]) + ":" + NameToString(npc.GetCurrentAppearanceName()));
+                    if GRIsBossBarNemesis(npc as NPCPuppet) {
+                        GRNotifyBossBar(player, npc, false);
+                    }
                 }
             }
         }
@@ -517,6 +772,10 @@ public class GRSpawner extends ScriptableSystem {
         }
 
         if Equals(eventType, DynamicEntityEventType.Deleted) {
+            if this.m_nemesisIDs[index] > 0 {
+                GRNotifyBossBar(GetPlayer(this.GetGameInstance()), null, true);
+                this.TakeLastHit(this.m_nemesisIDs[index]);
+            }
             this.RemoveMappin(index);
             ArrayErase(this.m_entityIDs, index);
             ArrayErase(this.m_nemesisIDs, index);
@@ -524,6 +783,34 @@ public class GRSpawner extends ScriptableSystem {
             ArrayErase(this.m_speakers, index);
             ArrayErase(this.m_mappins, index);
             ArrayErase(this.m_hasMappin, index);
+            ArrayErase(this.m_sides, index);
+        }
+    }
+
+    // Al aparecer en una redada, cada NPC se vuelve hostil con los del otro bando ya presentes (y ellos con el).
+    private func SetRaidHostility(index: Int32, npc: ref<ScriptedPuppet>) {
+        if !IsDefined(npc.GetAttitudeAgent()) {
+            return;
+        }
+        // La banda, hostil con V (sin avisarla: solo ataca si lo ve). Si fuera neutral, dispararle
+        // seria un delito y la policia iria a por V aunque la estuviera ayudando.
+        let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
+        if IsDefined(player) && IsDefined(player.GetAttitudeAgent()) {
+            npc.GetAttitudeAgent().SetAttitudeTowards(player.GetAttitudeAgent(),
+                this.m_sides[index] == 0 ? EAIAttitude.AIA_Hostile : EAIAttitude.AIA_Friendly);
+        }
+        let i: Int32 = 0;
+        while i < ArraySize(this.m_entityIDs) {
+            if this.m_sides[i] != this.m_sides[index] {
+                let enemy: ref<ScriptedPuppet> = GameInstance.GetDynamicEntitySystem().GetEntity(this.m_entityIDs[i]) as ScriptedPuppet;
+                if IsDefined(enemy) && IsDefined(enemy.GetAttitudeAgent()) {
+                    npc.GetAttitudeAgent().SetAttitudeTowards(enemy.GetAttitudeAgent(), EAIAttitude.AIA_Hostile);
+                    enemy.GetAttitudeAgent().SetAttitudeTowards(npc.GetAttitudeAgent(), EAIAttitude.AIA_Hostile);
+                    StimBroadcasterComponent.SendStimDirectly(enemy, gamedataStimType.CombatHit, npc);
+                    StimBroadcasterComponent.SendStimDirectly(npc, gamedataStimType.CombatHit, enemy);
+                }
+            }
+            i += 1;
         }
     }
 
@@ -539,9 +826,14 @@ public class GRSpawner extends ScriptableSystem {
         return index < ArraySize(this.m_deathKinds) ? this.m_deathKinds[index] : "normal";
     }
 
+    public func GetDeathCause(index: Int32) -> String {
+        return index < ArraySize(this.m_deathCauses) ? this.m_deathCauses[index] : "v";
+    }
+
     public func ClearDeaths() {
         ArrayClear(this.m_deaths);
         ArrayClear(this.m_deathKinds);
+        ArrayClear(this.m_deathCauses);
     }
 
     public func GetAppearanceReportCount() -> Int32 {

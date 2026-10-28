@@ -127,6 +127,10 @@ public class GRTraits extends ScriptableSystem {
             return;
         }
 
+        if instigator.IsPlayer() || Equals(GRTraits.HitSource(instigator, hitEvent.target as ScriptedPuppet), "v") {
+            spawner.RecordRaidHitByV(hitEvent.target.GetEntityID());
+        }
+
         if instigator.IsPlayer() {
             let targetId: Int32 = spawner.GetNemesisId(hitEvent.target.GetEntityID());
             if targetId > 0 {
@@ -141,8 +145,36 @@ public class GRTraits extends ScriptableSystem {
                 if attackerId > 0 {
                     traits.ScaleAll(attackerId, hitEvent, "deadly", 1.3);
                 }
+            } else {
+                let victimId: Int32 = spawner.GetNemesisId(hitEvent.target.GetEntityID());
+                if victimId > 0 {
+                    spawner.RecordHitBy(victimId, GRTraits.HitSource(instigator, hitEvent.target as ScriptedPuppet));
+                }
             }
         }
+    }
+
+    // Quien le pego a un Nemesis: "v" (aliados, torretas y drones de V incluidos), "police",
+    // "gang:<Banda>" (otra banda) u "other".
+    public static func HitSource(instigator: wref<GameObject>, victim: ref<ScriptedPuppet>) -> String {
+        // La policia primero: puede ser amistosa con V y no debe contar como aliado.
+        let puppet: ref<ScriptedPuppet> = instigator as ScriptedPuppet;
+        let record: wref<Character_Record> = IsDefined(puppet) ? puppet.GetRecord() : null;
+        if IsDefined(record) && IsDefined(record.Affiliation()) && Equals(record.Affiliation().Type(), gamedataAffiliation.NCPD) {
+            return "police";
+        }
+        let player: ref<GameObject> = GetPlayer(instigator.GetGame());
+        if IsDefined(player) && Equals(GameObject.GetAttitudeBetween(instigator, player), EAIAttitude.AIA_Friendly) {
+            return "v";
+        }
+        if !IsDefined(puppet) {
+            return "other";
+        }
+        let gang: String = GRDetection.GetGang(puppet);
+        if StrLen(gang) > 0 && (!IsDefined(victim) || NotEquals(gang, GRDetection.GetGang(victim))) {
+            return "gang:" + gang;
+        }
+        return "other";
     }
 
     public func OnScanned(npc: ref<ScriptedPuppet>) {
