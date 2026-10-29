@@ -134,6 +134,9 @@ public class GRWar extends ScriptableSystem {
         if StatusEffectSystem.ObjectHasStatusEffectWithTag(player, n"NoCombat") {
             return "no-combat zone";
         }
+        if IsDefined(spawner) && spawner.IsInScene() {
+            return "scene (no weapons)";
+        }
         return "";
     }
 

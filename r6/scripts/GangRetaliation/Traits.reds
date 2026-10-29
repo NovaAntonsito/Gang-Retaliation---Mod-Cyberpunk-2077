@@ -154,10 +154,7 @@ public class GRTraits extends ScriptableSystem {
         }
     }
 
-    // Quien le pego a un Nemesis: "v" (aliados, torretas y drones de V incluidos), "police",
-    // "gang:<Banda>" (otra banda) u "other".
     public static func HitSource(instigator: wref<GameObject>, victim: ref<ScriptedPuppet>) -> String {
-        // La policia primero: puede ser amistosa con V y no debe contar como aliado.
         let puppet: ref<ScriptedPuppet> = instigator as ScriptedPuppet;
         let record: wref<Character_Record> = IsDefined(puppet) ? puppet.GetRecord() : null;
         if IsDefined(record) && IsDefined(record.Affiliation()) && Equals(record.Affiliation().Type(), gamedataAffiliation.NCPD) {

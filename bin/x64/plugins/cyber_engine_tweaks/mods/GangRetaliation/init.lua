@@ -5,9 +5,9 @@ local Traits = require("modules/traits")
 local Hierarchy = require("modules/hierarchy")
 local War = require("modules/war")
 local Escorts = require("modules/escorts")
+local Vehicles = require("modules/vehicles")
 
 local GR = {
-    -- Version dev: ventana de CET con los botones de debug. release.py lo pone en false.
     dev = true, -- GR_DEV_FLAG
     overlayOpen = false,
     campaignId = 0,
@@ -211,7 +211,6 @@ local function processDeaths()
             n.status = "dead"
             n.diedAt = os.time()
             n.deathDay = gameDay()
-            -- diedBy: "v" | "police" | "gang" (diedByGang = banda) | "other"; "feud" lo pone Hierarchy.
             n.diedByGang = nil
             if string.sub(cause, 1, 5) == "gang:" then
                 n.diedBy, n.diedByGang = "gang", string.sub(cause, 6)
@@ -247,7 +246,7 @@ local function processDeaths()
     Store.save()
 end
 
-local function launchAmbush(n)
+local function launchAmbush(n, forceVehicle)
     local settings = getSettings()
     local spawner = getSpawner()
     if not settings or not spawner then return "no systems" end
@@ -256,8 +255,20 @@ local function launchAmbush(n)
     local line = text(Ambush.lineKey(n), "...")
     local escorts = Ambush.escorts(n, settings.ambushMaxEscorts)
     pushTraits(n)
-    if not spawner:StartAmbush(n.id, n.recordID, n.appearance or "", escorts, line, speaker) then
-        return "spawn failed"
+    -- A veces llegan en un vehiculo de la banda; si no hay sitio para el coche, a pie.
+    local useVehicle = forceVehicle or math.random(100) <= Vehicles.chancePercent
+    local vehicle = useVehicle and Vehicles.pick(n.gang) or nil
+    local started = vehicle and spawner:StartVehicleAmbush(n.id, n.recordID, n.appearance or "", escorts, line, speaker, vehicle)
+    if started then
+        print(string.format("[GangRetaliation] Transporte #%d (%s): vehiculo %s", n.id, n.gang, vehicle))
+    else
+        if not spawner:StartAmbush(n.id, n.recordID, n.appearance or "", escorts, line, speaker) then
+            print(string.format("[GangRetaliation] Transporte #%d (%s): ninguno, no se pudo generar (bloqueo: %s)",
+                n.id, n.gang, tostring(spawner:GetAmbushBlocker())))
+            return "spawn failed"
+        end
+        print(string.format("[GangRetaliation] Transporte #%d (%s): a pie (%s)", n.id, n.gang,
+            vehicle and ("fallo el vehiculo " .. vehicle) or "tirada de vehiculo fallida"))
     end
 
     n.ambushes = (n.ambushes or 0) + 1
@@ -267,7 +278,7 @@ local function launchAmbush(n)
     return "ambush #" .. n.id
 end
 
-local function tryAmbush(force, warnSeconds)
+local function tryAmbush(force, warnSeconds, forceVehicle)
     local settings = getSettings()
     local spawner = getSpawner()
     if not settings or not spawner then return "no systems" end
@@ -279,6 +290,8 @@ local function tryAmbush(force, warnSeconds)
         local waited = os.time() - (campaign.lastAmbush or 0)
         if waited < settings.ambushCooldownMinutes * 60 then return "cooldown" end
         if math.random(100) > settings.ambushChancePercent then return "roll failed" end
+        local safe, distance = Ambush.nearHome(campaign)
+        if safe then return string.format("near home (%.0f m)", distance) end
     end
 
     local blocker = spawner:GetAmbushBlocker()
@@ -296,11 +309,11 @@ local function tryAmbush(force, warnSeconds)
     local delay = warnSeconds or settings.ambushSmsSeconds or 0
     local phone = getSystem("GangRetaliation.GRPhone")
     if delay <= 0 or not phone or not phone:SendThreat(Names.display(n, lang()), text(Ambush.smsKey(n), "...")) then
-        return launchAmbush(n)
+        return launchAmbush(n, forceVehicle)
     end
     local now = spawner:GetTime()
 
-    GR.pendingAmbush = { id = n.id, due = now + delay, giveUp = now + delay + 300 }
+    GR.pendingAmbush = { id = n.id, due = now + delay, giveUp = now + delay + 600, vehicle = forceVehicle }
     return "sms #" .. n.id .. ", ambush in " .. delay .. " s"
 end
 
@@ -319,13 +332,52 @@ local function updatePendingAmbush()
     end
     local blocker = spawner:GetAmbushBlocker()
 
-    local result = blocker == "" and launchAmbush(n) or ("blocked: " .. blocker)
+    local result = blocker == "" and launchAmbush(n, pending.vehicle) or ("blocked: " .. blocker)
     if result ~= "spawn failed" and blocker == "" then
         GR.pendingAmbush = nil
         debugLog("Emboscada anunciada: " .. result)
     elseif now > pending.giveUp then
         GR.pendingAmbush = nil
         debugLog("Emboscada anunciada cancelada: " .. blocker)
+    else
+        -- V bajo techo o sin sitio: reintentar cada 5 s hasta que salga a la calle.
+        pending.due = now + 5
+    end
+end
+
+-- Noches dormidas en una cama propia (GRHomes): 2 noches en el mismo sitio lo vuelven casa, sin aviso.
+local function updateHomes()
+    local homes = getSystem("GangRetaliation.GRHomes")
+    if not homes or GR.campaignId == 0 then return end
+    local count = homes:GetSleepCount()
+    if count == 0 then return end
+    local campaign = Store.ensureCampaign(GR.campaignId)
+    for i = 0, count - 1 do
+        local x, y = homes:GetSleepX(i), homes:GetSleepY(i)
+        if Ambush.recordSleep(campaign, x, y, homes:GetSleepDay(i)) then
+            debugLog(string.format("Nueva casa en %.1f, %.1f", x, y))
+        end
+    end
+    homes:ClearSleeps()
+    Store.dirty = true
+end
+
+local function drawHomes()
+    if GR.campaignId == 0 then return end
+    local campaign = Store.campaign(GR.campaignId)
+    local player = Game.GetPlayer()
+    ImGui.Separator()
+    ImGui.Text(string.format("%s: %d", text("GR-UiHomes", "Safe homes (no ambushes nearby)"), #Ambush.allHomes(campaign)))
+    if player then
+        local _, distance = Ambush.homeFactor(player:GetWorldPosition(), campaign)
+        ImGui.TextDisabled(string.format("%.0f m", distance))
+    end
+    if player and #(campaign.homes or {}) > 0 and ImGui.Button(text("GR-UiRemoveHome", "Remove nearest home")) then
+        local removed = Ambush.removeNearestHome(Store.ensureCampaign(GR.campaignId), player:GetWorldPosition())
+        if removed then
+            Store.dirty = true
+            debugLog(string.format("Casa quitada (a %.0f m)", removed))
+        end
     end
 end
 
@@ -516,8 +568,6 @@ local function trySkirmish(force)
     return "skirmish " .. a .. " vs " .. d
 end
 
--- Redada de la NCPD cerca de V: un Nemesis de la zona y su escolta contra una patrulla.
--- Si sobrevive (se borra vivo al acabar), gana renombre; si muere, processDeaths ve la causa.
 local function tryRaid(force)
     local settings = getSettings()
     local spawner = getSpawner()
@@ -526,6 +576,8 @@ local function tryRaid(force)
         if (settings.raidChancePercent or 0) <= 0 then return "disabled" end
         if os.time() - (GR.lastRaid or 0) < 900 then return "cooldown" end
         if math.random(100) > settings.raidChancePercent then return "roll failed" end
+        local safe, distance = Ambush.nearHome(Store.campaign(GR.campaignId))
+        if safe then return string.format("near home (%.0f m)", distance) end
     end
     local blocker = spawner:GetAmbushBlocker()
     if blocker ~= "" then return "blocked: " .. blocker end
@@ -547,7 +599,6 @@ local function tryRaid(force)
     return "raid #" .. n.id
 end
 
--- Recompensa de la NCPD por ayudar a acabar con la banda, segun el rango del Nemesis.
 local raidBounty = { 1000, 2500, 5000 }
 
 local function checkRaid()
@@ -558,7 +609,6 @@ local function checkRaid()
     local outcome = spawner:TakeRaidOutcome()
     if outcome == "helpedPolice" or outcome == "helpedPoliceHurtCops" then
         local bounty = raidBounty[(n and n.rank) or 1] or raidBounty[1]
-        -- Si V le pego a algun policia, la mitad se va en gastos medicos de los agentes.
         local deducted = outcome == "helpedPoliceHurtCops"
         local amount = deducted and math.floor(bounty / 2) or bounty
         if spawner:GiveMoney(amount) then
@@ -569,7 +619,6 @@ local function checkRaid()
                 msg = string.format(text("GR-SmsRaidBounty", "Thanks for the assist, citizen. %d eurodollars have been wired to your account."), amount)
             end
             local phone = getSystem("GangRetaliation.GRPhone")
-            -- Basta con el SMS de la NCPD: el aviso en pantalla solo si no se pudo mandar.
             if not phone or not phone:SendBounty(deducted, msg) then notify(msg) end
             debugLog("Redada: recompensa NCPD " .. amount .. (deducted and " (con descuento)" or ""))
         end
@@ -829,6 +878,7 @@ registerForEvent("onUpdate", function(delta)
         local warSys = getSystem("GangRetaliation.GRWar")
         if warSys then warSys:Tick() end
         pcall(updatePendingAmbush)
+        pcall(updateHomes)
         GR.menuTimer = (GR.menuTimer or 0) + 1
         if GR.menuTimer >= 2 then
             GR.menuTimer = 0
@@ -872,7 +922,6 @@ end)
 registerForEvent("onOverlayOpen", function() GR.overlayOpen = true end)
 registerForEvent("onOverlayClose", function() GR.overlayOpen = false end)
 
--- Version release: solo lo que sirve para un reporte de error.
 local function drawReleaseWindow()
     if ImGui.Begin("Gang Retaliation") then
         if GR.campaignId == 0 then
@@ -885,6 +934,7 @@ local function drawReleaseWindow()
             ImGui.Text(text("GR-UiCampaign", "Campaign") .. ": " .. tostring(GR.campaignId))
             ImGui.Text(string.format("%s: %d (+%d %s)", text("GR-UiNemeses", "Nemeses"), alive, dead, text("GR-UiDead", "dead")))
             ImGui.TextDisabled(string.format("game day %.2f", gameDay()))
+            drawHomes()
         end
     end
     ImGui.End()
@@ -913,6 +963,9 @@ registerForEvent("onDraw", function()
             local sp = getSpawner()
             if sp then
                 ImGui.TextDisabled(string.format("%s [%s]  ambush: %s", sp:GetDistrictName(), sp:GetDistrictGangs(), sp:IsAmbushActive() and "ACTIVE" or (sp:GetAmbushBlocker() ~= "" and sp:GetAmbushBlocker() or "ready")))
+                local homeFactor, homeDistance = Ambush.homeFactor(Game.GetPlayer():GetWorldPosition(), Store.campaign(GR.campaignId))
+                ImGui.TextDisabled(string.format("home: %.0f m  (ambush chance x%.2f)", homeDistance, homeFactor))
+                drawHomes()
                 if GR.pendingAmbush then
                     ImGui.TextDisabled(string.format("SMS #%d: ambush in %.0f s", GR.pendingAmbush.id, GR.pendingAmbush.due - sp:GetTime()))
                 end
@@ -999,15 +1052,23 @@ registerForEvent("onDraw", function()
             if ImGui.Button(text("GR-UiForceAmbush", "Debug: ambush now")) then
                 local ok, result = pcall(tryAmbush, true)
                 GR.lastAction = tostring(result)
+                print("[GangRetaliation] Debug: " .. GR.lastAction)
             end
             ImGui.SameLine()
             if ImGui.Button(text("GR-UiSmsAmbush", "Debug: SMS + ambush in 15 s")) then
                 local ok, result = pcall(tryAmbush, true, 15)
                 GR.lastAction = tostring(result)
+                print("[GangRetaliation] Debug: " .. GR.lastAction)
+            end
+            if ImGui.Button("Debug: vehicle ambush now") then
+                local ok, result = pcall(tryAmbush, true, 0, true)
+                GR.lastAction = tostring(result)
+                print("[GangRetaliation] Debug: " .. GR.lastAction)
             end
             if ImGui.Button("Debug: gig reinforcement now") then
                 local ok, result = pcall(tryGig, true)
                 GR.lastAction = tostring(result)
+                print("[GangRetaliation] Debug: " .. GR.lastAction)
             end
             ImGui.SameLine()
             if ImGui.Button("Hide lines") then

@@ -41,8 +41,6 @@ public class GRDetection extends ScriptableSystem {
 
     private let m_fleeMode: Int32;
 
-    // Huida pendiente: se decide en un golpe o una muerte, pero se ejecuta en el tick (UpdateFleeing).
-    // Cambiar la IA dentro de esos eventos, con el NPC quizas muriendo, puede crashear el juego.
     private let m_pendingFlee: EntityID;
     private let m_hasPendingFlee: Bool;
 
@@ -190,7 +188,6 @@ public class GRDetection extends ScriptableSystem {
         if this.m_someoneFled || !IsDefined(settings) || !settings.lastManFlees {
             return;
         }
-        // En una redada de la NCPD nadie huye: si no, la banda no cae entera y V no cobra.
         let spawner: ref<GRSpawner> = GRSpawner.Get(this.GetGameInstance());
         if IsDefined(spawner) && spawner.IsRaidActive() {
             return;
@@ -214,6 +211,13 @@ public class GRDetection extends ScriptableSystem {
         let gi: GameInstance = this.GetGameInstance();
         if VehicleComponent.IsMountedToVehicle(gi, last) || VehicleComponent.IsMountedToVehicle(gi, GetPlayer(gi)) {
             this.Debug("Huida cancelada: hay un vehiculo de por medio");
+            return;
+        }
+        // Los generados por el mod (escoltas de emboscada) nunca son de una mision: la mision seguida no los frena.
+        let ownSpawn: Bool = IsDefined(spawner) && spawner.IsOwnSpawn(last.GetEntityID());
+        if IsDefined(spawner) && (spawner.IsInScene() || (!ownSpawn && spawner.IsStoryQuestTracked())) {
+            this.m_someoneFled = true;
+            this.Debug("Huida cancelada: escena o mision de historia");
             return;
         }
         let health: Float = this.GetHealthPercent(last);
@@ -252,11 +256,14 @@ public class GRDetection extends ScriptableSystem {
 
         let puppet: ref<NPCPuppet> = npc as NPCPuppet;
         let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
+        // NPCs del mundo (pueden ser de una mision): sin estado de miedo, que hace que el juego los
+        // descargue. Solo corren y se esconden.
+        let ownSpawn: Bool = this.IsOwnSpawn(npc.GetEntityID());
+        let mode: Int32 = ownSpawn ? this.m_fleeMode : 0;
         if IsDefined(puppet) && IsDefined(player) && IsDefined(puppet.GetAttitudeAgent()) && IsDefined(puppet.GetAIControllerComponent()) {
-            if this.m_fleeMode == 0 || this.m_fleeMode == 2 {
+            if mode == 0 || mode == 2 {
                 puppet.GetAttitudeAgent().SetAttitudeTowards(player.GetAttitudeAgent(), EAIAttitude.AIA_Neutral);
                 let offset: Vector4 = npc.GetWorldPosition() - player.GetWorldPosition();
-                // Pegados: Normalize de un vector casi nulo da NaN; huir en la direccion en que mira V.
                 if Vector4.Length(offset) < 0.5 {
                     offset = player.GetWorldForward();
                 }
@@ -273,14 +280,31 @@ public class GRDetection extends ScriptableSystem {
                 move.desiredDistanceFromTarget = 2.0;
                 puppet.GetAIControllerComponent().SendCommand(move);
             }
-            if this.m_fleeMode == 1 || this.m_fleeMode == 2 {
+            if mode == 1 || mode == 2 {
                 NPCPuppet.ChangeHighLevelState(puppet, gamedataNPCHighLevelState.Fear);
             }
         }
 
         GameObject.PlayVoiceOver(npc, n"fear_run", n"Scripts:GangRetaliation");
         this.SayFleeLine(npc, candidate.gang);
-        this.Debug("Huye el ultimo en pie (modo " + IntToString(this.m_fleeMode) + "): " + candidate.gang + " vida " + FloatToString(candidate.health) + "%");
+        this.Debug("Huye el ultimo en pie (modo " + IntToString(mode) + "): " + candidate.gang + " vida " + FloatToString(candidate.health) + "%");
+    }
+
+    private func IsOwnSpawn(id: EntityID) -> Bool {
+        let spawner: ref<GRSpawner> = GRSpawner.Get(this.GetGameInstance());
+        return IsDefined(spawner) && spawner.IsOwnSpawn(id);
+    }
+
+    // Se llama desde el tick, nunca desde un evento de golpe o muerte.
+    private func StopFlee(npc: ref<ScriptedPuppet>, candidate: ref<GRCandidate>) {
+        candidate.fleeing = false;
+        let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
+        if !IsDefined(player) || !IsDefined(npc.GetAttitudeAgent()) || !IsDefined(player.GetAttitudeAgent()) {
+            return;
+        }
+        npc.GetAttitudeAgent().SetAttitudeTowards(player.GetAttitudeAgent(), EAIAttitude.AIA_Hostile);
+        StimBroadcasterComponent.SendStimDirectly(player, gamedataStimType.CombatHit, npc);
+        this.Debug("Huida cortada: un NPC del mundo no sale de la zona (" + candidate.gang + ")");
     }
 
     private func SayFleeLine(npc: ref<ScriptedPuppet>, gang: String) {
@@ -309,10 +333,21 @@ public class GRDetection extends ScriptableSystem {
                 } else {
                     candidate.health = this.GetHealthPercent(npc);
                     candidate.position = npc.GetWorldPosition();
-                    let far: Bool = IsDefined(player) && Vector4.Distance(npc.GetWorldPosition(), player.GetWorldPosition()) > 45.0;
-                    if far || this.Now() - this.m_fleeStart[i] > 25.0 {
-                        this.Promote(candidate, "fled");
-                        done = true;
+                    let distance: Float = IsDefined(player) ? Vector4.Distance(npc.GetWorldPosition(), player.GetWorldPosition()) : 0.0;
+                    let timeout: Bool = this.Now() - this.m_fleeStart[i] > 25.0;
+                    if this.IsOwnSpawn(candidate.entityID) {
+                        if distance > 45.0 || timeout {
+                            this.Promote(candidate, "fled");
+                            done = true;
+                        }
+                    } else {
+                        // Un NPC del mundo puede ser necesario para una mision: si se aleja, el juego lo
+                        // descarga y la mision queda sin terminar. Vuelve a pelear; si sobrevive al
+                        // combate, el fin de combate lo registra como escapado.
+                        if distance > 30.0 || timeout {
+                            this.StopFlee(npc, candidate);
+                            done = true;
+                        }
                     }
                 }
             }

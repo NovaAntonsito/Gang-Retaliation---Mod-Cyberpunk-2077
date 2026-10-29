@@ -33,7 +33,6 @@ function Ambush.pick(nemeses, districtGangs, metOnly)
     return pool[#pool].n
 end
 
--- Patrullas de la NCPD para las redadas (recordIDs del prevention system del juego).
 Ambush.policeRecords = {
     "Character.prevention_police_handgun_wa",
     "Character.prevention_police_rifle_ma",
@@ -42,7 +41,6 @@ Ambush.policeRecords = {
     "Character.prevention_police_shotgun_wa",
 }
 
--- Policias para la redada: mas cuanto mas alto el rango del Nemesis (3 / 4 / 5).
 function Ambush.police(nemesis)
     local ids = {}
     for i = 1, 2 + (nemesis.rank or 1) do
@@ -74,6 +72,80 @@ function Ambush.pickFromGang(nemeses, gang)
         if n.gang == gang then table.insert(list, n) end
     end
     return Ambush.pick(list, {})
+end
+
+-- Casas de V (x, y). Cerca de casa es mas seguro: sin ataques a menos de homeSafe metros
+-- (en horizontal, el H10 esta a 120 m de altura) y probabilidad normal a partir de homeFull.
+-- El H10 viene de fabrica; el resto se aprende donde V duerme (campaign.homes).
+Ambush.builtinHomes = {
+    { x = -1381.7, y = 1270.8 }, -- H10, Watson
+}
+Ambush.homeSafe = 60
+Ambush.homeFull = 300
+Ambush.homeRadius = 30
+
+local function distance2D(ax, ay, bx, by)
+    local dx, dy = ax - bx, ay - by
+    return math.sqrt(dx * dx + dy * dy)
+end
+
+function Ambush.allHomes(campaign)
+    local list = {}
+    for _, home in ipairs(Ambush.builtinHomes) do table.insert(list, home) end
+    for _, home in ipairs(campaign.homes or {}) do table.insert(list, home) end
+    return list
+end
+
+function Ambush.homeFactor(pos, campaign)
+    local nearest = math.huge
+    for _, home in ipairs(Ambush.allHomes(campaign)) do
+        nearest = math.min(nearest, distance2D(pos.x, pos.y, home.x, home.y))
+    end
+    if nearest <= Ambush.homeSafe then return 0, nearest end
+    if nearest >= Ambush.homeFull then return 1, nearest end
+    return (nearest - Ambush.homeSafe) / (Ambush.homeFull - Ambush.homeSafe), nearest
+end
+
+function Ambush.nearHome(campaign)
+    local player = Game.GetPlayer()
+    if not player then return false end
+    local factor, distance = Ambush.homeFactor(player:GetWorldPosition(), campaign)
+    return math.random() > factor, distance
+end
+
+-- Un sitio pasa a ser casa tras dormir ahi 2 noches distintas (radio homeRadius). Devuelve true si se agrego.
+function Ambush.recordSleep(campaign, x, y, day)
+    for _, home in ipairs(Ambush.allHomes(campaign)) do
+        if distance2D(x, y, home.x, home.y) < Ambush.homeRadius then return false end
+    end
+    campaign.sleeps = campaign.sleeps or {}
+    for _, sleep in ipairs(campaign.sleeps) do
+        if distance2D(x, y, sleep.x, sleep.y) < Ambush.homeRadius and math.floor(day) ~= math.floor(sleep.day) then
+            campaign.homes = campaign.homes or {}
+            table.insert(campaign.homes, { x = x, y = y })
+            local kept = {}
+            for _, other in ipairs(campaign.sleeps) do
+                if distance2D(x, y, other.x, other.y) >= Ambush.homeRadius then table.insert(kept, other) end
+            end
+            campaign.sleeps = kept
+            return true
+        end
+    end
+    table.insert(campaign.sleeps, { x = x, y = y, day = day })
+    while #campaign.sleeps > 20 do table.remove(campaign.sleeps, 1) end
+    return false
+end
+
+-- Quita la casa aprendida mas cercana a pos (el H10 de fabrica no se puede quitar).
+function Ambush.removeNearestHome(campaign, pos)
+    local best, bestDistance = nil, math.huge
+    for i, home in ipairs(campaign.homes or {}) do
+        local d = distance2D(pos.x, pos.y, home.x, home.y)
+        if d < bestDistance then best, bestDistance = i, d end
+    end
+    if not best then return nil end
+    table.remove(campaign.homes, best)
+    return bestDistance
 end
 
 function Ambush.smsKey(nemesis)

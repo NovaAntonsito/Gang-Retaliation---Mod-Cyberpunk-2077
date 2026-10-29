@@ -240,8 +240,6 @@ local function feud(campaign, gang, ctx)
     end
 end
 
--- Choque con la NCPD fuera de camara: un Nemesis de la banda escapa (gana renombre), muere
--- (puede volver, como cualquier muerte normal) o cae arrestado unos dias (n.jailedUntil: no embosca).
 local function policeClash(campaign, gang, ctx)
     local state = gangState(campaign, gang)
     local today = math.floor(ctx.day)
@@ -349,7 +347,7 @@ local function enforceCaps(campaign, gang, ctx)
 end
 
 -- Paso periodico (init.lua lo llama una vez por minuto).
--- ctx = { day, settings = { vacancyDays, feudChancePercent, policeChancePercent }, random(), isSpawned(id),
+-- ctx = { day, settings = { vacancyDays, feudChancePercent }, random(), isSpawned(id),
 --         addNemesis(data), event(kind, a, b, reason) }
 function Hierarchy.update(campaign, ctx)
     processReturns(campaign, ctx)

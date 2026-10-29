@@ -23,7 +23,7 @@ function Store.load()
     if ok and type(decoded) == "table" and type(decoded.campaigns) == "table" then
         Store.data = decoded
         for key, campaign in pairs(Store.data.campaigns) do
-            if type(campaign.nemeses) ~= "table" or #campaign.nemeses == 0 then
+            if type(campaign.nemeses) ~= "table" or (#campaign.nemeses == 0 and #(campaign.homes or {}) == 0) then
                 Store.data.campaigns[key] = nil
                 Store.dirty = true
             end

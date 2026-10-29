@@ -15,8 +15,6 @@ public class GRPhone extends ScriptableSystem {
         return this.SendJournalSms("gr_unknown", "gr_threats", 1, 12, from, fallbackText);
     }
 
-    // Recompensa de la NCPD (redadas): contacto "NCPD" del journal del mod. sms_01-06 = pago
-    // completo, sms_07-09 = con descuento por los agentes heridos.
     public func SendBounty(deducted: Bool, fallbackText: String) -> Bool {
         if deducted {
             return this.SendJournalSms("gr_ncpd", "gr_bounty", 7, 9, "NCPD", fallbackText);
@@ -24,9 +22,6 @@ public class GRPhone extends ScriptableSystem {
         return this.SendJournalSms("gr_ncpd", "gr_bounty", 1, 6, "NCPD", fallbackText);
     }
 
-    // Activa el siguiente SMS de la conversacion entre sms_<first> y sms_<last> (contacts/<contacto>/
-    // <conversacion>/sms_NN, ver build_archive.py); al gastarlos todos, ese tramo vuelve a empezar.
-    // Sin el .archive: solo aviso.
     private func SendJournalSms(contactId: String, conversationId: String, first: Int32, last: Int32, from: String, fallbackText: String) -> Bool {
         let journal: ref<JournalManager> = GameInstance.GetJournalManager(this.GetGameInstance());
         let contact: String = "contacts/" + contactId;

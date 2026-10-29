@@ -36,6 +36,8 @@ public class GREnglish extends ModLocalizationPackage {
         this.Text("GR-SetDebugLogDesc", "Writes detailed messages to the redscript log and the CET console.");
 
         this.Text("GR-UiCampaign", "Campaign");
+        this.Text("GR-UiHomes", "Safe homes (no ambushes nearby)");
+        this.Text("GR-UiRemoveHome", "Remove nearest home");
         this.Text("GR-UiNemeses", "Nemeses");
         this.Text("GR-UiNoData", "No Nemeses yet.");
         this.Text("GR-UiWaiting", "Waiting for a loaded save...");
@@ -323,6 +325,8 @@ public class GRSpanish extends ModLocalizationPackage {
         this.Text("GR-SetDebugLogDesc", "Escribe mensajes detallados en el log de redscript y en la consola de CET.");
 
         this.Text("GR-UiCampaign", "Campaña");
+        this.Text("GR-UiHomes", "Refugios (sin emboscadas cerca)");
+        this.Text("GR-UiRemoveHome", "Quitar el refugio más cercano");
         this.Text("GR-UiNemeses", "Némesis");
         this.Text("GR-UiNoData", "Todavía no hay Némesis.");
         this.Text("GR-UiWaiting", "Esperando a que se cargue una partida...");
