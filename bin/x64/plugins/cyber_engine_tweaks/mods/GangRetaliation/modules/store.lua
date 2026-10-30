@@ -2,8 +2,24 @@ local Store = {
     path = "data/gang_retaliation.json",
     schema = 1,
     data = nil,
-    dirty = false,
+    -- Sube con cada "Store.dirty = true": el menu se reconstruye solo cuando cambia.
+    version = 0,
 }
+
+local dirty = false
+setmetatable(Store, {
+    __index = function(_, key)
+        if key == "dirty" then return dirty end
+    end,
+    __newindex = function(t, key, value)
+        if key == "dirty" then
+            dirty = value
+            if value then rawset(t, "version", t.version + 1) end
+        else
+            rawset(t, key, value)
+        end
+    end,
+})
 
 local function emptyData()
     return { schema = Store.schema, campaigns = {} }

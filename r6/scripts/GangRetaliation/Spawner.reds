@@ -420,7 +420,20 @@ public class GRSpawner extends ScriptableSystem {
         if this.IsInScene() {
             return "scene (no weapons)";
         }
+        if GRSpawner.IsTWRSquadActive() {
+            return "They Will Remember squad";
+        }
         return "";
+    }
+
+    // They Will Remember manda sus propias venganzas (tag TheyWillRemember.Squad): no sumar otra encima.
+    public static func IsTWRSquadActive() -> Bool {
+        let des: ref<DynamicEntitySystem> = GameInstance.GetDynamicEntitySystem();
+        if !IsDefined(des) {
+            return false;
+        }
+        let squad: array<ref<Entity>> = des.GetTagged(n"TheyWillRemember.Squad");
+        return ArraySize(squad) > 0;
     }
 
     // Tier de escena 2-5: V camina sin armas (departamento, escenas de mision). En la calle es 1.

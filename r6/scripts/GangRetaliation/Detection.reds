@@ -425,26 +425,41 @@ public class GRDetection extends ScriptableSystem {
             this.Debug("Fin de combate por muerte de V: sin huidas");
             return;
         }
-        let threshold: Float = Cast<Float>(GRSettings.Get(this.GetGameInstance()).escapeHealthPercent);
+        let settings: ref<GRSettings> = GRSettings.Get(this.GetGameInstance());
+        let threshold: Float = Cast<Float>(settings.escapeHealthPercent);
+        let debugLog: Bool = IsDefined(settings) && settings.debugLog;
 
-        for candidate in this.m_candidates {
-            let npc: ref<ScriptedPuppet> = GameInstance.FindEntityByID(this.GetGameInstance(), candidate.entityID) as ScriptedPuppet;
-            let neutralized: Bool = false;
-            if IsDefined(npc) {
-                neutralized = GRDetection.IsNeutralized(npc);
-                if !neutralized {
-                    candidate.health = this.GetHealthPercent(npc);
-                    candidate.position = npc.GetWorldPosition();
-                }
+        // Copia local: OnNPCDeath puede borrar de m_candidates mientras se recorre.
+        let candidates: array<ref<GRCandidate>> = this.m_candidates;
+        let i: Int32 = 0;
+        while i < ArraySize(candidates) {
+            let candidate: ref<GRCandidate> = candidates[i];
+            let npc: ref<ScriptedPuppet>;
+            if IsDefined(candidate) {
+                npc = GameInstance.FindEntityByID(this.GetGameInstance(), candidate.entityID) as ScriptedPuppet;
             }
+            // Si otro mod lo borró, no hay pruebas de que haya escapado.
+            if IsDefined(npc) && !GRDetection.IsNeutralized(npc) {
+                candidate.health = this.GetHealthPercent(npc);
+                candidate.position = npc.GetWorldPosition();
 
-            if !neutralized {
-                this.Debug("Fin de combate: " + candidate.gang + " vida " + FloatToString(candidate.health) + "%" + (candidate.fleeing ? " (huyendo)" : ""));
+                if debugLog {
+                    let msg: String = "Fin de combate: ";
+                    msg += candidate.gang;
+                    msg += " vida ";
+                    msg += FloatToString(candidate.health);
+                    msg += "%";
+                    if candidate.fleeing {
+                        msg += " (huyendo)";
+                    }
+                    GRLog(msg);
+                }
 
                 if !candidate.fleeing && candidate.health > 0.0 && candidate.health <= threshold {
                     this.Promote(candidate, "escaped");
                 }
             }
+            i += 1;
         }
         this.ResetFight();
     }

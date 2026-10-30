@@ -137,6 +137,9 @@ public class GRWar extends ScriptableSystem {
         if IsDefined(spawner) && spawner.IsInScene() {
             return "scene (no weapons)";
         }
+        if GRSpawner.IsTWRSquadActive() {
+            return "They Will Remember squad";
+        }
         return "";
     }
 

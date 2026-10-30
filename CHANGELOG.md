@@ -1,5 +1,44 @@
 # Changelog - Gang Retaliation
 
+## [1.2.2] - 2026-10-29
+
+### Arreglado
+- **Crash al terminar un combate** (`GRDetection.OnPlayerCombatEnded`, reportado con They Will
+  Remember, Dark Future y EDO). El texto de depuración se armaba siempre, aunque el log de
+  depuración estuviera apagado, y la lista de candidatos se recorría mientras otro evento podía
+  modificarla.
+- **Némesis falsos con mods que borran NPCs.** Un pandillero que desaparece al acabar el combate
+  (por ejemplo, un escuadrón de They Will Remember que el mod borra) ya no se asciende como
+  "escapó herido".
+- **"No se pudo escribir data/gang_retaliation.json".** Vortex no instalaba la carpeta `data`
+  vacía y el mod no podía guardar a sus Némesis. Ahora viene con un archivo `.keep` adentro.
+
+### Cambiado
+- **Rendimiento.** La capa CET ya no consulta al juego en cada frame: todo va en un tick de 1 s.
+  El menú NÉMESIS se reconstruye solo cuando cambian los datos, y no cada 2 s aunque esté
+  cerrado. Medido con 44 Némesis: los picos bajan de 11 ms a 4 ms y casi no hay gasto en reposo.
+- **Compatibilidad con They Will Remember.** Mientras haya un escuadrón de venganza de TWR en el
+  mapa, no salen emboscadas, redadas de la NCPD ni escaramuzas de Gang Retaliation, para no
+  sumar dos ataques a la vez. Sin TWR instalado no cambia nada.
+
+## [1.2.1] - 2026-10-29
+
+### Nuevo
+- **Emboscadas en vehículo.** El Némesis y su escolta pueden llegar en coche, aparcar y bajarse.
+  Si no hay sitio detrás de V, llegan a pie.
+- **Casas de V.** Cerca de una casa de V no hay emboscadas (probabilidad 0 a menos de 60 m,
+  normal a más de 300 m). El departamento H10 viene de fábrica; el resto se aprende al dormir
+  2 noches en él.
+
+### Arreglado
+- **Emboscadas dentro del departamento o en pasillos.** Ahora solo aparecen a cielo abierto: si V
+  está bajo techo, la emboscada anunciada espera a que salga. Tampoco salen en escenas donde V no
+  puede sacar el arma.
+- **Misiones que no se podían terminar porque el último enemigo huía.** No hay huidas en las
+  misiones de historia que V tiene seguidas, y los NPCs del mundo ya no salen de la zona al huir.
+- **Emboscadas atascadas.** Se cierran solas a los 40 s.
+- Durante una emboscada, defenderse no cuenta como delito.
+
 ## [1.2] - 2026-10-28
 
 ### Nuevo

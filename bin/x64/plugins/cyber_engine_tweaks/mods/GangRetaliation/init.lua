@@ -853,8 +853,14 @@ registerForEvent("onShutdown", function()
     if Store.dirty then Store.save() end
 end)
 
-registerForEvent("onUpdate", function(delta)
-    refreshCampaign()
+local function update(delta)
+    -- Cada llamada a redscript cuesta: todo el sondeo va en un tick de 1 s, no en cada frame.
+    GR.fleeTimer = (GR.fleeTimer or 0) + delta
+    local tick = GR.fleeTimer >= 1
+    if tick then
+        GR.fleeTimer = 0
+        refreshCampaign()
+    end
     if GR.campaignId == 0 then return end
     if (GR.warmup or 0) > 0 then
         GR.warmup = GR.warmup - delta
@@ -866,9 +872,14 @@ registerForEvent("onUpdate", function(delta)
         if not ok then print("[GangRetaliation] Error en jerarquia: " .. tostring(err)) end
     end
 
-    GR.fleeTimer = (GR.fleeTimer or 0) + delta
-    if GR.fleeTimer >= 1 then
-        GR.fleeTimer = 0
+    if tick then
+        processPending()
+        processDeaths()
+        checkEncounter()
+        checkRaid()
+        processAppearances()
+        processReveals()
+
         local det = getDetection()
         if det then det:UpdateFleeing() end
         local speech = getSystem("GangRetaliation.GRSpeech")
@@ -879,9 +890,13 @@ registerForEvent("onUpdate", function(delta)
         if warSys then warSys:Tick() end
         pcall(updatePendingAmbush)
         pcall(updateHomes)
+        -- El menu solo se reconstruye si cambiaron los datos (o la campana). Cada 30 s igual,
+        -- por los textos que dependen del dia de juego o del idioma.
         GR.menuTimer = (GR.menuTimer or 0) + 1
-        if GR.menuTimer >= 2 then
+        if Store.version ~= GR.menuVersion or GR.campaignId ~= GR.menuCampaign or GR.menuTimer >= 30 then
             GR.menuTimer = 0
+            GR.menuVersion = Store.version
+            GR.menuCampaign = GR.campaignId
             local okM, errM = pcall(pushMenu)
             if not okM then print("[GangRetaliation] Error en datos del menu: " .. tostring(errM)) end
         end
@@ -890,7 +905,8 @@ registerForEvent("onUpdate", function(delta)
     end
 
     GR.ambushTimer = (GR.ambushTimer or 0) + delta
-    if GR.ambushTimer >= 60 then
+    -- Solo en el frame del tick, justo despues de refreshCampaign (por si cambio la partida).
+    if tick and GR.ambushTimer >= 60 then
         GR.ambushTimer = 0
         local ok, result = pcall(tryAmbush, false)
         debugLog("Emboscada: " .. tostring(result))
@@ -902,12 +918,6 @@ registerForEvent("onUpdate", function(delta)
         debugLog("Redada: " .. tostring(resultR))
     end
 
-    processPending()
-    processDeaths()
-    checkEncounter()
-    checkRaid()
-    processAppearances()
-    processReveals()
     flushMessages(delta)
 
     if Store.dirty then
@@ -916,6 +926,20 @@ registerForEvent("onUpdate", function(delta)
             GR.saveTimer = 0
             Store.save()
         end
+    end
+end
+
+-- Dev: cuanto tarda onUpdate (promedio y pico por segundo), para medir el rendimiento.
+GR.perf = { sum = 0, frames = 0, peak = 0, time = 0, avgMs = 0, peakMs = 0 }
+registerForEvent("onUpdate", function(delta)
+    if not GR.dev then return update(delta) end
+    local start = os.clock()
+    update(delta)
+    local p, ms = GR.perf, (os.clock() - start) * 1000
+    p.sum, p.frames, p.peak, p.time = p.sum + ms, p.frames + 1, math.max(p.peak, ms), p.time + delta
+    if p.time >= 1 then
+        p.avgMs, p.peakMs = p.sum / p.frames, p.peak
+        p.sum, p.frames, p.peak, p.time = 0, 0, 0, 0
     end
 end)
 
@@ -955,6 +979,7 @@ registerForEvent("onDraw", function()
             local l = lang()
             ImGui.Text(text("GR-UiCampaign", "Campaign") .. ": " .. tostring(GR.campaignId))
             ImGui.Text(text("GR-UiNemeses", "Nemeses") .. ": " .. tostring(#campaign.nemeses))
+            ImGui.TextDisabled(string.format("onUpdate: %.3f ms/frame avg, %.3f ms peak (last second)", GR.perf.avgMs, GR.perf.peakMs))
 
             local det = getDetection()
             if det then
