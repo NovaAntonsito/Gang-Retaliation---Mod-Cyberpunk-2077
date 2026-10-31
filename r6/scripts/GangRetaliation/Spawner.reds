@@ -39,8 +39,16 @@ public class GRSpawner extends ScriptableSystem {
     private let m_ambushSawCombat: Bool;
     private let m_ambushCalmSince: Float;
 
+    // Reintentos de hostilidad (Nemesis que aparecen pasivos) y barra de jefe a vigilar.
+    private let m_provokeAmbush: Float;
+    private let m_provokeAt: Float;
+    private let m_provokeCount: Int32;
+    private let m_bossBar: wref<BossHealthBarGameController>;
+
     private let m_objectivePins: Int32;
     private let m_objectiveSource: String;
+    private let m_objectiveDistance: Float;
+    private let m_objectiveCheckedAt: Float;
     private let m_stuckChecked: Bool;
 
     private let m_spawnPositions: array<Vector4>;
@@ -435,8 +443,15 @@ public class GRSpawner extends ScriptableSystem {
         if !IsDefined(des) {
             return false;
         }
+        // Solo miembros vivos: TWR no borra los cadaveres mientras V este a menos de 80 m.
         let squad: array<ref<Entity>> = des.GetTagged(n"TheyWillRemember.Squad");
-        return ArraySize(squad) > 0;
+        for member in squad {
+            let npc: ref<ScriptedPuppet> = member as ScriptedPuppet;
+            if IsDefined(npc) && !GRDetection.IsNeutralized(npc) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Tier de escena 2-5: V camina sin armas (departamento, escenas de mision). En la calle es 1.
@@ -450,36 +465,38 @@ public class GRSpawner extends ScriptableSystem {
     }
 
     // Distancia horizontal de V al punto mas cercano del objetivo seguido (-1 = sin punto en el mapa).
+    // Igual que el mapa del juego (worldMap.swift): solo si la entrada seguida es un objetivo, y con su hash.
+    // GetQuestMappinPosition NO va aca: espera el hash de un mappin, no de un objetivo (sospecha del crash
+    // del 31/10). Se recalcula como mucho una vez por segundo (el panel CET lo pide en cada frame).
     // m_objectivePins / m_objectiveSource quedan para el panel dev.
     public func GetTrackedObjectiveDistance() -> Float {
+        let now: Float = this.Now();
+        if this.m_objectiveCheckedAt > 0.0 && now - this.m_objectiveCheckedAt < 1.0 {
+            return this.m_objectiveDistance;
+        }
+        this.m_objectiveCheckedAt = now;
+        this.m_objectiveDistance = -1.0;
         this.m_objectivePins = 0;
         this.m_objectiveSource = "none";
         let gi: GameInstance = this.GetGameInstance();
         let player: ref<PlayerPuppet> = GetPlayer(gi);
         let journal: ref<JournalManager> = GameInstance.GetJournalManager(gi);
-        if !IsDefined(player) || !IsDefined(journal) {
-            return -1.0;
-        }
-        let entry: wref<JournalEntry> = journal.GetTrackedEntry();
-        if !IsDefined(entry) {
-            return -1.0;
-        }
-        let hash: Uint32 = Cast<Uint32>(journal.GetEntryHash(entry));
         let mappins: ref<MappinSystem> = GameInstance.GetMappinSystem(gi);
-        let positions: array<Vector3>;
-        if mappins.GetQuestMappinPositionsByObjective(hash, positions) && ArraySize(positions) > 0 {
-            this.m_objectiveSource = "objective";
-        } else {
-            let single: Vector3;
-            if mappins.GetQuestMappinPosition(hash, single) {
-                ArrayPush(positions, single);
-                this.m_objectiveSource = "mappin";
-            }
+        if !IsDefined(player) || !IsDefined(journal) || !IsDefined(mappins) {
+            return -1.0;
         }
+        let objective: ref<JournalQuestObjectiveBase> = journal.GetTrackedEntry() as JournalQuestObjectiveBase;
+        if !IsDefined(objective) {
+            this.m_objectiveSource = "not an objective";
+            return -1.0;
+        }
+        let positions: array<Vector3>;
+        mappins.GetQuestMappinPositionsByObjective(Cast<Uint32>(journal.GetEntryHash(objective)), positions);
         this.m_objectivePins = ArraySize(positions);
         if this.m_objectivePins == 0 {
             return -1.0;
         }
+        this.m_objectiveSource = "objective";
         let playerPos: Vector4 = player.GetWorldPosition();
         let nearest: Float = -1.0;
         for pos in positions {
@@ -490,6 +507,7 @@ public class GRSpawner extends ScriptableSystem {
                 nearest = d;
             }
         }
+        this.m_objectiveDistance = nearest;
         return nearest;
     }
 
@@ -502,7 +520,17 @@ public class GRSpawner extends ScriptableSystem {
         return "objective: " + questType + ", " + where + " (" + IntToString(this.m_objectivePins) + " pins, " + this.m_objectiveSource + ")";
     }
 
-    // Mision de historia seguida (no gigs): ahi una huida puede dejar la mision sin terminar.
+    // Mision de historia seguida y V cerca de su objetivo: ahi una huida puede dejar la mision sin terminar.
+    // Lejos del objetivo, o sin punto en el mapa, no bloquea (casi todos siguen siempre alguna mision).
+    public func IsStoryQuestNearby() -> Bool {
+        if !this.IsStoryQuestTracked() {
+            return false;
+        }
+        let distance: Float = this.GetTrackedObjectiveDistance();
+        return distance >= 0.0 && distance < 150.0;
+    }
+
+    // Mision de historia seguida (no gigs).
     public func IsStoryQuestTracked() -> Bool {
         let quest: wref<JournalQuest> = this.GetTrackedQuest();
         if !IsDefined(quest) {
@@ -1043,6 +1071,7 @@ public class GRSpawner extends ScriptableSystem {
         this.CheckNeutralized();
         this.CheckTaunts();
         this.TickImmunity();
+        this.TickBossBar();
         if !this.m_ambushActive {
             return;
         }
@@ -1068,6 +1097,7 @@ public class GRSpawner extends ScriptableSystem {
             this.TickRaid(now);
             return;
         }
+        this.ProvokeIdle(player, now);
         if player.IsInCombat() {
             this.m_ambushSawCombat = true;
             this.m_ambushCalmSince = 0.0;
@@ -1082,6 +1112,49 @@ public class GRSpawner extends ScriptableSystem {
             GRLog("Fin de emboscada: limpiando");
             this.CheckNeutralized();
             this.DespawnAll();
+        }
+    }
+
+    // La hostilidad se pone una vez al aparecer; si la IA del NPC no estaba lista, el estimulo se pierde y
+    // queda hostil pero quieto. Cada 3 s se vuelve a provocar a los que esten cerca y fuera de combate
+    // (maximo 6 veces por emboscada). Desde el tick, nunca desde eventos.
+    private func ProvokeIdle(player: ref<PlayerPuppet>, now: Float) {
+        if this.m_provokeAmbush != this.m_ambushStart {
+            this.m_provokeAmbush = this.m_ambushStart;
+            this.m_provokeCount = 0;
+            this.m_provokeAt = now;
+        }
+        if this.m_provokeCount >= 6 || now - this.m_provokeAt < 3.0 {
+            return;
+        }
+        this.m_provokeAt = now;
+        let provoked: Int32 = 0;
+        let i: Int32 = 0;
+        while i < ArraySize(this.m_entityIDs) {
+            let npc: ref<ScriptedPuppet> = GameInstance.FindEntityByID(this.GetGameInstance(), this.m_entityIDs[i]) as ScriptedPuppet;
+            if IsDefined(npc) && !GRDetection.IsNeutralized(npc) && !NPCPuppet.IsInCombat(npc)
+                && Vector4.Distance(npc.GetWorldPosition(), player.GetWorldPosition()) < 60.0
+                && IsDefined(npc.GetAttitudeAgent()) && IsDefined(player.GetAttitudeAgent()) {
+                npc.GetAttitudeAgent().SetAttitudeTowards(player.GetAttitudeAgent(), EAIAttitude.AIA_Hostile);
+                TargetTrackingExtension.InjectThreat(npc, player);
+                StimBroadcasterComponent.SendStimDirectly(player, gamedataStimType.CombatHit, npc);
+                provoked += 1;
+            }
+            i += 1;
+        }
+        if provoked > 0 {
+            this.m_provokeCount += 1;
+            GRLog("Emboscada: " + IntToString(provoked) + " NPC fuera de combate, provocados de nuevo (" + IntToString(this.m_provokeCount) + "/6)");
+        }
+    }
+
+    public func SetBossBar(bar: ref<BossHealthBarGameController>) {
+        this.m_bossBar = bar;
+    }
+
+    private func TickBossBar() {
+        if IsDefined(this.m_bossBar) {
+            this.m_bossBar.GRCleanupBossBar(GetPlayer(this.GetGameInstance()));
         }
     }
 

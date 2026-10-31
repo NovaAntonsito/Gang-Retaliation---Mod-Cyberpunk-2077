@@ -51,6 +51,38 @@ private final func AddBoss(boss: ref<NPCPuppet>) -> Void {
     }
     ArrayPush(this.m_bossPuppets, boss);
     this.ShowBossHealthBar(boss, false);
+    let spawner: ref<GRSpawner> = GRSpawner.Get(boss.GetGame());
+    if IsDefined(spawner) {
+        spawner.SetBossBar(this);
+    }
+}
+
+// El juego saca la barra solo con eventos de amenaza o al acabar el combate. Si el mod borra al Nemesis
+// (fin de emboscada) o queda vivo y lejos, no llega ninguno y la barra se quedaba. Lo llama GRSpawner.Tick.
+@addMethod(BossHealthBarGameController)
+public func GRCleanupBossBar(player: ref<PlayerPuppet>) {
+    let removed: Bool = false;
+    let i: Int32 = ArraySize(this.m_bossPuppets) - 1;
+    while i >= 0 {
+        let boss: ref<NPCPuppet> = this.m_bossPuppets[i];
+        let gone: Bool = !IsDefined(boss) || !ScriptedPuppet.IsActive(boss) || boss.IsDead() || ScriptedPuppet.IsDefeated(boss);
+        if !gone && IsDefined(player) && GRIsBossBarNemesis(boss) {
+            gone = Vector4.Distance(boss.GetWorldPosition(), player.GetWorldPosition()) > 100.0;
+        }
+        if gone {
+            ArrayErase(this.m_bossPuppets, i);
+            removed = true;
+        }
+        i -= 1;
+    }
+    if !removed {
+        return;
+    }
+    if ArraySize(this.m_bossPuppets) > 0 && IsDefined(this.m_bossPuppets[0]) {
+        this.ShowBossHealthBar(this.m_bossPuppets[0], true);
+    } else {
+        this.HideBossHealthBar();
+    }
 }
 
 @wrapMethod(BossHealthBarGameController)

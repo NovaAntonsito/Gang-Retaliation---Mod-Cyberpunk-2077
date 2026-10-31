@@ -313,7 +313,7 @@ local function tryAmbush(force, warnSeconds, forceVehicle)
     end
     local now = spawner:GetTime()
 
-    GR.pendingAmbush = { id = n.id, due = now + delay, giveUp = now + delay + 600, vehicle = forceVehicle }
+    GR.pendingAmbush = { id = n.id, due = now + delay, giveUp = now + delay + 1800, vehicle = forceVehicle }
     return "sms #" .. n.id .. ", ambush in " .. delay .. " s"
 end
 

@@ -11,6 +11,8 @@ public class GRCandidate {
     public let health: Float;
     public let position: Vector4;
     public let fleeing: Bool;
+    // Ya huyo en esta pelea (aunque StopFlee lo haya hecho volver): si sobrevive, escapo.
+    public let fled: Bool;
 }
 
 public class GRNemesisEvent {
@@ -249,8 +251,8 @@ public class GRDetection extends ScriptableSystem {
         }
         // Los generados por el mod (escoltas de emboscada) nunca son de una mision: la mision seguida no los frena.
         let ownSpawn: Bool = IsDefined(spawner) && spawner.IsOwnSpawn(npc.GetEntityID());
-        if IsDefined(spawner) && (spawner.IsInScene() || (!ownSpawn && spawner.IsStoryQuestTracked())) {
-            return "scene or story quest";
+        if IsDefined(spawner) && (spawner.IsInScene() || (!ownSpawn && spawner.IsStoryQuestNearby())) {
+            return "scene or story quest nearby";
         }
         return "";
     }
@@ -278,6 +280,7 @@ public class GRDetection extends ScriptableSystem {
         this.m_someoneFled = true;
         let candidate: ref<GRCandidate> = this.UpsertCandidate(npc);
         candidate.fleeing = true;
+        candidate.fled = true;
         ArrayPush(this.m_fleeing, candidate);
         ArrayPush(this.m_fleeStart, this.Now());
 
@@ -482,8 +485,10 @@ public class GRDetection extends ScriptableSystem {
                     GRLog(msg);
                 }
 
-                if !candidate.fleeing && candidate.health > 0.0 && candidate.health <= threshold {
-                    this.Promote(candidate, "escaped");
+                // Un NPC del mundo que huyo vuelve a pelear al alejarse (StopFlee); si sobrevive al combate,
+                // escapo aunque tenga mas vida que el umbral de huida herida.
+                if !candidate.fleeing && candidate.health > 0.0 && (candidate.health <= threshold || candidate.fled) {
+                    this.Promote(candidate, candidate.fled ? "fled" : "escaped");
                 }
             }
             i += 1;
