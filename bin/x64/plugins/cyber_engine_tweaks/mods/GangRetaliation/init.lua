@@ -991,6 +991,7 @@ registerForEvent("onDraw", function()
                 local homeFactor, homeDistance = Ambush.homeFactor(Game.GetPlayer():GetWorldPosition(), Store.campaign(GR.campaignId))
                 ImGui.TextDisabled(string.format("home: %.0f m  (ambush chance x%.2f)", homeDistance, homeFactor))
                 drawHomes()
+                ImGui.TextDisabled(sp:GetTrackedObjectiveInfo())
                 if GR.pendingAmbush then
                     ImGui.TextDisabled(string.format("SMS #%d: ambush in %.0f s", GR.pendingAmbush.id, GR.pendingAmbush.due - sp:GetTime()))
                 end

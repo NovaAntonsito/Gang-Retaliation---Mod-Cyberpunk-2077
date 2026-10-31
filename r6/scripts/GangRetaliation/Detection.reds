@@ -216,6 +216,7 @@ public class GRDetection extends ScriptableSystem {
         if StrLen(blocker) > 0 {
             this.m_someoneFled = true;
             this.Debug("Huida cancelada: " + blocker);
+            this.Debug("Huida cancelada: escena o mision de historia (" + spawner.GetTrackedObjectiveInfo() + ")");
             return;
         }
         let health: Float = this.GetHealthPercent(last);
