@@ -215,8 +215,11 @@ public class GRDetection extends ScriptableSystem {
         }
         if StrLen(blocker) > 0 {
             this.m_someoneFled = true;
-            this.Debug("Huida cancelada: " + blocker);
-            this.Debug("Huida cancelada: escena o mision de historia (" + spawner.GetTrackedObjectiveInfo() + ")");
+            if IsDefined(spawner) {
+                this.Debug("Huida cancelada: " + blocker + " (" + spawner.GetTrackedObjectiveInfo() + ")");
+            } else {
+                this.Debug("Huida cancelada: " + blocker);
+            }
             return;
         }
         let health: Float = this.GetHealthPercent(last);
