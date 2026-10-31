@@ -1090,6 +1090,14 @@ registerForEvent("onDraw", function()
                 GR.lastAction = tostring(result)
                 print("[GangRetaliation] Debug: " .. GR.lastAction)
             end
+            local hud = getSystem("GangRetaliation.GRHud")
+            if hud then
+                if ImGui.Button(hud:IsGodMode() and "Debug: god mode ON (click = off)" or "Debug: god mode OFF (click = on)") then
+                    GR.lastAction = hud:ToggleGodMode() and "God mode ON" or "God mode OFF"
+                end
+                ImGui.TextDisabled(hud:GetGodModeInfo())
+                ImGui.TextDisabled(hud:GetDebugInfo())
+            end
             if ImGui.Button("Debug: gig reinforcement now") then
                 local ok, result = pcall(tryGig, true)
                 GR.lastAction = tostring(result)
