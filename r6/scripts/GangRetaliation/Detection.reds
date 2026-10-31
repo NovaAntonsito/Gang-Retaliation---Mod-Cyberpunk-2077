@@ -208,15 +208,14 @@ public class GRDetection extends ScriptableSystem {
             return;
         }
 
-        let gi: GameInstance = this.GetGameInstance();
-        if VehicleComponent.IsMountedToVehicle(gi, last) || VehicleComponent.IsMountedToVehicle(gi, GetPlayer(gi)) {
+        let blocker: String = this.GetFleeBlocker(last);
+        if Equals(blocker, "vehicle") {
             this.Debug("Huida cancelada: hay un vehiculo de por medio");
             return;
         }
-        // Los generados por el mod (escoltas de emboscada) nunca son de una mision: la mision seguida no los frena.
-        let ownSpawn: Bool = IsDefined(spawner) && spawner.IsOwnSpawn(last.GetEntityID());
-        if IsDefined(spawner) && (spawner.IsInScene() || (!ownSpawn && spawner.IsStoryQuestTracked())) {
+        if StrLen(blocker) > 0 {
             this.m_someoneFled = true;
+            this.Debug("Huida cancelada: " + blocker);
             this.Debug("Huida cancelada: escena o mision de historia (" + spawner.GetTrackedObjectiveInfo() + ")");
             return;
         }
@@ -226,6 +225,31 @@ public class GRDetection extends ScriptableSystem {
             this.m_pendingFlee = last.GetEntityID();
             this.m_hasPendingFlee = true;
         }
+    }
+
+    // "" = este pandillero puede huir si queda ultimo en pie. Lo usan la huida y la linea de huida del HUD.
+    public func GetFleeBlocker(npc: ref<ScriptedPuppet>) -> String {
+        let gi: GameInstance = this.GetGameInstance();
+        let settings: ref<GRSettings> = GRSettings.Get(gi);
+        if !IsDefined(settings) || !settings.enabled || !settings.lastManFlees {
+            return "disabled";
+        }
+        if !GRDetection.IsEligible(npc) || GRDetection.IsNeutralized(npc) {
+            return "not eligible";
+        }
+        let spawner: ref<GRSpawner> = GRSpawner.Get(gi);
+        if IsDefined(spawner) && spawner.IsRaidActive() {
+            return "raid";
+        }
+        if VehicleComponent.IsMountedToVehicle(gi, npc) || VehicleComponent.IsMountedToVehicle(gi, GetPlayer(gi)) {
+            return "vehicle";
+        }
+        // Los generados por el mod (escoltas de emboscada) nunca son de una mision: la mision seguida no los frena.
+        let ownSpawn: Bool = IsDefined(spawner) && spawner.IsOwnSpawn(npc.GetEntityID());
+        if IsDefined(spawner) && (spawner.IsInScene() || (!ownSpawn && spawner.IsStoryQuestTracked())) {
+            return "scene or story quest";
+        }
+        return "";
     }
 
     private func RunPendingFlee() {
