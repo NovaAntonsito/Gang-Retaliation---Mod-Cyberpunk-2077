@@ -217,7 +217,7 @@ public class GRDetection extends ScriptableSystem {
         let ownSpawn: Bool = IsDefined(spawner) && spawner.IsOwnSpawn(last.GetEntityID());
         if IsDefined(spawner) && (spawner.IsInScene() || (!ownSpawn && spawner.IsStoryQuestTracked())) {
             this.m_someoneFled = true;
-            this.Debug("Huida cancelada: escena o mision de historia");
+            this.Debug("Huida cancelada: escena o mision de historia (" + spawner.GetTrackedObjectiveInfo() + ")");
             return;
         }
         let health: Float = this.GetHealthPercent(last);

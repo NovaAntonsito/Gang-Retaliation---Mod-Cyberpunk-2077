@@ -38,6 +38,9 @@ public class GRSpawner extends ScriptableSystem {
     private let m_ambushStart: Float;
     private let m_ambushSawCombat: Bool;
     private let m_ambushCalmSince: Float;
+
+    private let m_objectivePins: Int32;
+    private let m_objectiveSource: String;
     private let m_stuckChecked: Bool;
 
     private let m_spawnPositions: array<Vector4>;
@@ -444,6 +447,59 @@ public class GRSpawner extends ScriptableSystem {
         }
         let tier: Int32 = player.GetPlayerStateMachineBlackboard().GetInt(GetAllBlackboardDefs().PlayerStateMachine.HighLevel);
         return tier >= 2 && tier <= 5;
+    }
+
+    // Distancia horizontal de V al punto mas cercano del objetivo seguido (-1 = sin punto en el mapa).
+    // m_objectivePins / m_objectiveSource quedan para el panel dev.
+    public func GetTrackedObjectiveDistance() -> Float {
+        this.m_objectivePins = 0;
+        this.m_objectiveSource = "none";
+        let gi: GameInstance = this.GetGameInstance();
+        let player: ref<PlayerPuppet> = GetPlayer(gi);
+        let journal: ref<JournalManager> = GameInstance.GetJournalManager(gi);
+        if !IsDefined(player) || !IsDefined(journal) {
+            return -1.0;
+        }
+        let entry: wref<JournalEntry> = journal.GetTrackedEntry();
+        if !IsDefined(entry) {
+            return -1.0;
+        }
+        let hash: Uint32 = Cast<Uint32>(journal.GetEntryHash(entry));
+        let mappins: ref<MappinSystem> = GameInstance.GetMappinSystem(gi);
+        let positions: array<Vector3>;
+        if mappins.GetQuestMappinPositionsByObjective(hash, positions) && ArraySize(positions) > 0 {
+            this.m_objectiveSource = "objective";
+        } else {
+            let single: Vector3;
+            if mappins.GetQuestMappinPosition(hash, single) {
+                ArrayPush(positions, single);
+                this.m_objectiveSource = "mappin";
+            }
+        }
+        this.m_objectivePins = ArraySize(positions);
+        if this.m_objectivePins == 0 {
+            return -1.0;
+        }
+        let playerPos: Vector4 = player.GetWorldPosition();
+        let nearest: Float = -1.0;
+        for pos in positions {
+            let dx: Float = pos.X - playerPos.X;
+            let dy: Float = pos.Y - playerPos.Y;
+            let d: Float = SqrtF(dx * dx + dy * dy);
+            if nearest < 0.0 || d < nearest {
+                nearest = d;
+            }
+        }
+        return nearest;
+    }
+
+    // Texto para el panel dev: tipo de mision seguida, distancia y de donde salio el punto.
+    public func GetTrackedObjectiveInfo() -> String {
+        let quest: wref<JournalQuest> = this.GetTrackedQuest();
+        let questType: String = IsDefined(quest) ? EnumValueToString("gameJournalQuestType", Cast<Int64>(EnumInt(quest.GetType()))) : "-";
+        let distance: Float = this.GetTrackedObjectiveDistance();
+        let where: String = distance < 0.0 ? "no pin" : IntToString(Cast<Int32>(distance)) + " m";
+        return "objective: " + questType + ", " + where + " (" + IntToString(this.m_objectivePins) + " pins, " + this.m_objectiveSource + ")";
     }
 
     // Mision de historia seguida (no gigs): ahi una huida puede dejar la mision sin terminar.
